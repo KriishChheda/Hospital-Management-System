@@ -606,7 +606,7 @@ export default function LandingPage() {
           </FadeUp>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <ReviewCard
-              name="Dr. Aris Chheda"
+              name="Dr. Aris Kapoor"
               role="Chief Surgeon"
               text="The AI disease suggestions are a fantastic second-set-of-eyes. It has significantly reduced my documentation time and I actually trust its ranked suggestions."
               delay={0.05}

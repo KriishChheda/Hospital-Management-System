@@ -8,7 +8,7 @@ import React, { useState } from "react";
 interface PatientForm {
   name: string;
   age: string;
-  gender: "Male" | "Female" | "Other" | ""; 
+  gender: "Male" | "Female" | "Other" | "";
   phone: string;
 }
 
@@ -21,17 +21,17 @@ export default function NewPatientPage() {
     phone: "",
   });
 
-// TS: Record<keyof PatientForm, string> ensures our error keys match our form keys
+  // TS: Record<keyof PatientForm, string> ensures our error keys match our form keys
   const [errors, setErrors] = useState<Partial<Record<keyof PatientForm, string>>>({});
   const [loading, setLoading] = useState(false);
 
-// --- Validation Logic ---
+  // --- Validation Logic ---
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof PatientForm, string>> = {};
 
     // 1. Name: Required, min 3 chars
     if (!form.name.trim()) newErrors.name = "Full name is required";
-   
+
     // 2. Age: Optional but must be 0-120 if entered
     if (form.age) {
       const ageNum = parseInt(form.age);
@@ -55,26 +55,33 @@ export default function NewPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Trigger validation before proceeding
     if (!validateForm()) return;
 
     setLoading(true);
-    console.log("Submitting validated data:", form);
-    
+
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500)); 
-      alert("Registration Successful!");
-      setForm({ name: "", age: "", gender: "", phone: "" });
-      setErrors({}); // Clear errors on success
+      const response = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Registration successful! Patient ID: ${result.id}`);
+        setForm({ name: "", age: "", gender: "", phone: "" });
+      } else {
+        alert(result.error || "Something went wrong.");
+      }
     } catch (err) {
-      alert("Something went wrong.");
+      alert("Could not connect to the database.");
     } finally {
       setLoading(false);
     }
   };
 
- return (
+  return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-soft-blue overflow-hidden">
         <div className="bg-navy px-8 py-5">
@@ -84,20 +91,19 @@ export default function NewPatientPage() {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            
+
             {/* Name Field */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-bold text-dark">Full Name *</label>
               <input
                 type="text"
                 placeholder="e.g. Rahul Sharma"
-                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${
-                  errors.name ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
-                }`}
+                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${errors.name ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+                  }`}
                 value={form.name}
                 onChange={(e) => {
                   setForm({ ...form, name: e.target.value });
-                  if (errors.name) setErrors({...errors, name: ""}); // Clear error while typing
+                  if (errors.name) setErrors({ ...errors, name: "" }); // Clear error while typing
                 }}
               />
               {errors.name && <span className="text-status-red text-[10px] font-bold uppercase">{errors.name}</span>}
@@ -109,9 +115,8 @@ export default function NewPatientPage() {
               <input
                 type="number"
                 placeholder="Years"
-                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${
-                  errors.age ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
-                }`}
+                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${errors.age ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+                  }`}
                 value={form.age}
                 onChange={(e) => setForm({ ...form, age: e.target.value })}
               />
@@ -122,9 +127,8 @@ export default function NewPatientPage() {
             <div className="flex flex-col gap-2">
               <label className="text-sm font-bold text-dark">Gender *</label>
               <select
-                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all cursor-pointer ${
-                  errors.gender ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
-                }`}
+                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all cursor-pointer ${errors.gender ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+                  }`}
                 value={form.gender}
                 onChange={(e) => setForm({ ...form, gender: e.target.value as any })}
               >
@@ -142,9 +146,8 @@ export default function NewPatientPage() {
               <input
                 type="tel"
                 placeholder="10-digit mobile number"
-                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${
-                  errors.phone ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
-                }`}
+                className={`p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all ${errors.phone ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+                  }`}
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
