@@ -14,3 +14,22 @@ model Patient {
   phone     String   @unique
   createdAt DateTime @default(now())
 }
+
+enum Role {
+  ADMIN
+  DOCTOR
+  NURSE
+  RECEPTIONIST
+  PHARMACIST
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  employeeId String   @unique
+  email      String   @unique
+  password   String
+  role       Role
+  status     Boolean  @default(false) // false = Pending, true = Approved
+  createdAt  DateTime @default(now())
+}

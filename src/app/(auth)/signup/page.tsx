@@ -1,13 +1,48 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
 export default function SignupPage() {
+  const [form, setForm] = useState({
+    name: "",
+    employeeId: "",
+    email: "",
+    password: "",
+    role: "DOCTOR", // Default matching the Enum
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Application submitted! Please wait for Admin approval.");
+        // Optional: Redirect to login or clear form
+      } else {
+        alert(data.error || "Signup failed");
+      }
+    } catch (err) {
+      alert("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-light-grey flex items-center justify-center p-6 bg-[radial-gradient(circle_at_bottom_left,_var(--color-soft-blue)_0%,_transparent_40%)]">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-soft-blue flex flex-col md:flex-row overflow-hidden"
@@ -30,28 +65,61 @@ export default function SignupPage() {
             <p className="text-grey text-sm">Fill in your professional details.</p>
           </header>
 
-          <form className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SignupInput label="Full Name" placeholder="Dr. Jane Smith" />
-              <SignupInput label="Employee ID" placeholder="HMS-2024-001" />
+              <SignupInput
+                label="Full Name"
+                placeholder="Dr. Jane Smith"
+                value={form.name}
+                onChange={(val) => setForm({ ...form, name: val })}
+              />
+              <SignupInput
+                label="Employee ID"
+                placeholder="HMS-2024-001"
+                value={form.employeeId}
+                onChange={(val) => setForm({ ...form, employeeId: val })}
+              />
             </div>
-            
-            <SignupInput label="Official Email" type="email" placeholder="jane@hospital.com" />
-            
+
+            <SignupInput
+              label="Official Email"
+              type="email"
+              placeholder="jane@hospital.com"
+              value={form.email}
+              onChange={(val) => setForm({ ...form, email: val })}
+            />
+
+            {/* Added Password Field */}
+            <SignupInput
+              label="Account Password"
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={(val) => setForm({ ...form, password: val })}
+            />
+
             <div>
               <label className="text-[10px] font-black text-grey uppercase tracking-wider">Role Assignment</label>
-              <select className="w-full mt-1 p-3 bg-light-grey border border-soft-blue rounded-xl outline-none focus:ring-2 focus:ring-cyan">
-                <option>Doctor</option>
-                <option>Nurse</option>
-                <option>Admin</option>
+              <select
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="w-full mt-1 p-3 bg-light-grey border border-soft-blue rounded-xl outline-none focus:ring-2 focus:ring-cyan text-sm font-medium"
+              >
+                <option value="DOCTOR">Doctor</option>
+                <option value="NURSE">Nurse</option>
+                <option value="RECEPTIONIST">Receptionist</option>
+                <option value="PHARMACIST">Pharmacist</option>
+                <option value="ADMIN">Admin</option>
               </select>
             </div>
 
-            <motion.button 
+            <motion.button
+              type="submit"
+              disabled={loading}
               whileHover={{ y: -2 }}
-              className="w-full bg-cyan text-white py-3 rounded-xl font-bold shadow-lg shadow-cyan/30 mt-4"
+              className="w-full bg-cyan text-white py-3 rounded-xl font-bold shadow-lg shadow-cyan/30 mt-4 disabled:opacity-50"
             >
-              Submit Application
+              {loading ? "Processing..." : "Submit Application"}
             </motion.button>
           </form>
 
@@ -66,13 +134,28 @@ export default function SignupPage() {
   );
 }
 
-function SignupInput({ label, type = "text", placeholder }: { label: string, type?: string, placeholder: string }) {
+function SignupInput({
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange
+}: {
+  label: string,
+  type?: string,
+  placeholder: string,
+  value: string,
+  onChange: (val: string) => void
+}) {
   return (
     <div className="space-y-1">
       <label className="text-[10px] font-black text-grey uppercase tracking-wider">{label}</label>
-      <input 
-        type={type} 
+      <input
+        type={type}
         placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
         className="w-full p-3 bg-light-grey border border-soft-blue rounded-xl outline-none focus:ring-2 focus:ring-cyan transition-all text-sm"
       />
     </div>
