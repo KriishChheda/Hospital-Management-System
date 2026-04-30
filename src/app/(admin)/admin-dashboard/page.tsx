@@ -12,133 +12,255 @@ interface PendingUser {
     createdAt: string;
 }
 
+const ROLE_COLORS: Record<string, string> = {
+    doctor: "bg-cyan/10 text-cyan border-cyan/20",
+    nurse: "bg-status-green/10 text-status-green border-status-green/20",
+    admin: "bg-navy/10 text-navy border-navy/20",
+    pharmacist: "bg-status-orange/10 text-status-orange border-status-orange/20",
+    reception: "bg-soft-blue text-grey border-soft-blue",
+    "lab tech": "bg-status-orange/10 text-status-orange border-status-orange/20",
+};
+
+function getRoleStyle(role: string) {
+    return ROLE_COLORS[role.toLowerCase()] ?? "bg-soft-blue text-grey border-soft-blue";
+}
+
+function getInitials(name: string) {
+    return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatDate(dateStr: string) {
+    try {
+        return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(dateStr));
+    } catch {
+        return dateStr;
+    }
+}
+
+/* ── Skeleton row ── */
+function SkeletonRow() {
+    return (
+        <tr className="border-b border-soft-blue last:border-0">
+            {[..."1234"].map((k) => (
+                <td key={k} className="p-5">
+                    <div className="h-4 bg-soft-blue rounded-full animate-pulse w-3/4" />
+                    {k === "1" && <div className="h-3 bg-soft-blue/60 rounded-full animate-pulse w-1/2 mt-2" />}
+                </td>
+            ))}
+        </tr>
+    );
+}
+
+/* ── Main ── */
 export default function AdminDashboard() {
     const [users, setUsers] = useState<PendingUser[]>([]);
     const [loading, setLoading] = useState(true);
+    const [approvingId, setApprovingId] = useState<string | null>(null);
 
-    // 1. Fetch pending users on load
     const fetchPendingUsers = async () => {
         try {
             const res = await fetch("/api/admin/users");
             const data = await res.json();
-            setUsers(data);
-        } catch (err) {
+            setUsers(Array.isArray(data) ? data : []);
+        } catch {
             console.error("Failed to load requests");
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        fetchPendingUsers();
-    }, []);
+    useEffect(() => { fetchPendingUsers(); }, []);
 
-    // 2. Approval Logic
     const approveUser = async (id: string) => {
+        setApprovingId(id);
         try {
             const res = await fetch("/api/admin/users", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userId: id }),
             });
-
             if (res.ok) {
-                // Remove the approved user from the local UI list
-                setUsers(users.filter((user) => user.id !== id));
+                // brief pause so the exit animation plays
+                setTimeout(() => {
+                    setUsers((prev) => prev.filter((u) => u.id !== id));
+                    setApprovingId(null);
+                }, 300);
             } else {
-                alert("Approval failed");
+                setApprovingId(null);
             }
-        } catch (err) {
-            alert("Server error during approval");
+        } catch {
+            alert("Error during approval");
+            setApprovingId(null);
         }
     };
 
     return (
         <div className="space-y-8">
-            {/* Header Section */}
-            <header className="flex justify-between items-end">
-                <div>
-                    <h1 className="text-3xl font-black text-navy tracking-tight">System Control</h1>
-                    <p className="text-grey font-medium">Manage staff access and verify credentials.</p>
-                </div>
-                <div className="bg-white px-4 py-2 rounded-2xl border border-soft-blue shadow-sm">
-                    <span className="text-[10px] font-black text-grey uppercase tracking-widest block">Pending Requests</span>
-                    <span className="text-xl font-black text-cyan">{users.length}</span>
-                </div>
-            </header>
 
-            {/* Main Table Section */}
-            <div className="bg-white rounded-3xl border border-soft-blue overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-light-grey border-b border-soft-blue">
-                        <tr>
-                            <th className="p-5 text-[10px] font-black text-grey uppercase tracking-widest">Employee</th>
-                            <th className="p-5 text-[10px] font-black text-grey uppercase tracking-widest">ID / Email</th>
-                            <th className="p-5 text-[10px] font-black text-grey uppercase tracking-widest">Assigned Role</th>
-                            <th className="p-5 text-[10px] font-black text-grey uppercase tracking-widest text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-soft-blue">
-                        <AnimatePresence>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={4} className="p-10 text-center text-grey animate-pulse font-bold">
-                                        Scanning for new requests...
-                                    </td>
-                                </tr>
-                            ) : users.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="p-10 text-center text-grey italic">
-                                        No pending registration requests.
-                                    </td>
-                                </tr>
-                            ) : (
-                                users.map((user) => (
+            {/* ── Header ── */}
+            <motion.header
+                initial={{ opacity: 0, y: -12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-start justify-between gap-4 flex-wrap"
+            >
+                <div>
+                    <h1 className="text-3xl font-black text-navy tracking-tight">Staff Approvals</h1>
+                    <p className="text-grey font-medium mt-1">
+                        Verify credentials for incoming medical staff requests.
+                    </p>
+                </div>
+
+                {/* Live counter badge */}
+                <AnimatePresence mode="wait">
+                    {!loading && (
+                        <motion.div
+                            key={users.length}
+                            initial={{ opacity: 0, scale: 0.85 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.85 }}
+                            transition={{ duration: 0.25 }}
+                            className="flex items-center gap-2 bg-white border border-soft-blue rounded-xl px-4 py-2.5 shadow-sm"
+                        >
+                            <span
+                                className={`w-2 h-2 rounded-full ${users.length > 0 ? "bg-status-orange animate-pulse" : "bg-status-green"
+                                    }`}
+                            />
+                            <span className="text-[13px] font-bold text-navy">
+                                {users.length} Pending
+                            </span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.header>
+
+            {/* ── Table card ── */}
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white rounded-3xl border border-soft-blue overflow-hidden shadow-sm"
+            >
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-light-grey border-b border-soft-blue">
+                            <tr>
+                                {["Professional Details", "Employee Identity", "Requested On", "Target Role", "Action"].map((col) => (
+                                    <th
+                                        key={col}
+                                        className={`p-5 text-[10px] font-black text-grey uppercase tracking-widest whitespace-nowrap ${col === "Action" ? "text-right" : ""}`}
+                                    >
+                                        {col}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+
+                        <tbody className="divide-y divide-soft-blue">
+                            <AnimatePresence initial={false}>
+                                {loading ? (
+                                    <>
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                    </>
+                                ) : users.length === 0 ? (
                                     <motion.tr
-                                        key={user.id}
+                                        key="empty"
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="hover:bg-soft-blue/5 transition-colors"
+                                        transition={{ duration: 0.4 }}
                                     >
-                                        <td className="p-5">
-                                            <p className="font-bold text-navy">{user.name}</p>
-                                            <p className="text-[10px] text-grey font-medium">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
-                                        </td>
-                                        <td className="p-5">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-black text-navy">{user.employeeId}</span>
-                                                <span className="text-xs text-grey">{user.email}</span>
+                                        <td colSpan={5} className="py-20 text-center">
+                                            <div className="flex flex-col items-center gap-3">
+                                                {/* Checkmark icon */}
+                                                <div className="w-12 h-12 rounded-full bg-soft-blue flex items-center justify-center">
+                                                    <svg className="w-6 h-6 stroke-cyan fill-none stroke-2" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </div>
+                                                <p className="font-bold text-navy text-[15px]">All caught up!</p>
+                                                <p className="text-grey text-sm">No pending staff requests at this time.</p>
                                             </div>
                                         </td>
-                                        <td className="p-5">
-                                            <span className="bg-soft-blue text-cyan px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
-                                                {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="p-5 text-right">
-                                            <button
-                                                onClick={() => approveUser(user.id)}
-                                                className="bg-navy text-white px-6 py-2 rounded-xl text-xs font-bold hover:bg-cyan hover:text-navy transition-all active:scale-95 shadow-lg shadow-navy/10"
-                                            >
-                                                Approve Access
-                                            </button>
-                                        </td>
                                     </motion.tr>
-                                ))
-                            )}
-                        </AnimatePresence>
-                    </tbody>
-                </table>
-            </div>
+                                ) : (
+                                    users.map((user, i) => (
+                                        <motion.tr
+                                            key={user.id}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, x: -24, transition: { duration: 0.25 } }}
+                                            transition={{ duration: 0.35, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                                            className="group hover:bg-soft-blue/30 transition-colors duration-150"
+                                        >
+                                            {/* Professional Details */}
+                                            <td className="p-5">
+                                                <div className="flex items-center gap-3">
+                                                    {/* Avatar */}
+                                                    <div className="w-9 h-9 rounded-full bg-soft-blue flex items-center justify-center text-navy font-black text-xs shrink-0">
+                                                        {getInitials(user.name)}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-navy text-[14px]">{user.name}</p>
+                                                        <p className="text-xs text-grey mt-0.5">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
 
-            {/* Quick Tips */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-6 bg-cyan/5 border border-cyan/10 rounded-2xl">
-                    <h4 className="font-bold text-navy text-sm mb-2">Verification Protocol</h4>
-                    <p className="text-xs text-grey leading-relaxed">Always cross-check the Employee ID with the physical HR register before granting system access.</p>
+                                            {/* Employee ID */}
+                                            <td className="p-5">
+                                                <span className="font-mono font-bold text-navy text-sm bg-light-grey border border-soft-blue rounded-lg px-2.5 py-1">
+                                                    {user.employeeId}
+                                                </span>
+                                            </td>
+
+                                            {/* Date */}
+                                            <td className="p-5 text-sm text-grey font-medium whitespace-nowrap">
+                                                {formatDate(user.createdAt)}
+                                            </td>
+
+                                            {/* Role */}
+                                            <td className="p-5">
+                                                <span className={`inline-block border rounded-lg px-3 py-1 text-[11px] font-black uppercase tracking-wider ${getRoleStyle(user.role)}`}>
+                                                    {user.role}
+                                                </span>
+                                            </td>
+
+                                            {/* Action */}
+                                            <td className="p-5 text-right">
+                                                <button
+                                                    onClick={() => approveUser(user.id)}
+                                                    disabled={approvingId === user.id}
+                                                    className="relative inline-flex items-center gap-2 bg-navy text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan hover:text-navy active:scale-95 transition-all duration-200 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    {approvingId === user.id ? (
+                                                        <>
+                                                            {/* Spinner */}
+                                                            <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                                            </svg>
+                                                            Approving…
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                            Approve
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </td>
+                                        </motion.tr>
+                                    ))
+                                )}
+                            </AnimatePresence>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

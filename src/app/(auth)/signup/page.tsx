@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import ShapeGrid from "@/components/ShapeGrid";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -41,11 +42,24 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-light-grey flex items-center justify-center p-6 bg-[radial-gradient(circle_at_bottom_left,_var(--color-soft-blue)_0%,_transparent_40%)]">
+    <div className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden bg-navy">
+      {/* Animated Background */}
+      <div className="absolute inset-0 z-0">
+        <ShapeGrid 
+          shape="circle" 
+          speed={0.5} 
+          squareSize={40} 
+          borderColor="rgba(230, 244, 248, 0.15)" 
+          hoverFillColor="#00b4d8"
+          backgroundColor="#0a1d30"
+          hoverTrailAmount={5}
+        />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-soft-blue flex flex-col md:flex-row overflow-hidden"
+        className="w-full max-w-2xl bg-white/95 backdrop-blur-2xl rounded-3xl shadow-[0_0_40px_rgba(0,180,216,0.15)] border border-cyan/30 flex flex-col md:flex-row overflow-hidden z-10"
       >
         {/* Left Branding Side */}
         <div className="md:w-1/3 bg-navy p-8 flex flex-col justify-between text-white">

@@ -24,7 +24,11 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ message: "Application submitted to Admin" }, { status: 201 });
     } catch (error: any) {
-        return NextResponse.json({ error: "User already exists" }, { status: 400 });
+        console.error("Signup error:", error);
+        if (error?.code === "P2002") {
+            return NextResponse.json({ error: "User with this email or employee ID already exists" }, { status: 400 });
+        }
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
 

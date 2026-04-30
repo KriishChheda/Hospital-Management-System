@@ -27,9 +27,20 @@ export async function POST(request: Request) {
         { expiresIn: "8h" }
     );
 
-    return NextResponse.json({
+    // 4. Build response with httpOnly cookie for middleware auth
+    const response = NextResponse.json({
         token,
         role: user.role,
         name: user.name
     });
+
+    response.cookies.set("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 8 * 60 * 60, // 8 hours
+        path: "/",
+    });
+
+    return response;
 }

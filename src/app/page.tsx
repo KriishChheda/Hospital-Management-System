@@ -3,6 +3,7 @@
 import React, { useRef } from "react";
 import { motion, useScroll, useTransform, useInView } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 
 /* ─── FADE UP WRAPPER ─── */
 function FadeUp({
@@ -104,17 +105,16 @@ export default function LandingPage() {
 
       {/* ── NAV ── */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-soft-blue">
-        <div className="max-w-7xl mx-auto px-6 h-[68px] flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2.5 no-underline">
-            <div className="w-8 h-8 bg-navy rounded-lg flex items-center justify-center text-white font-black text-base">
-              B
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-black text-navy tracking-tighter text-lg">BIZLUME</span>
-              <span className="text-[9px] font-bold tracking-[0.2em] text-cyan uppercase border border-cyan/30 px-1.5 py-0.5 rounded">
-                HMS
-              </span>
-            </div>
+        <div className="max-w-7xl mx-auto px-6 h-[90px] flex justify-between items-center">
+          <Link href="/" className="flex items-center no-underline">
+            <Image
+              src="/logo-header.png"
+              alt="Bizlume Technology & Solutions"
+              width={650}
+              height={200}
+              className="h-16 w-auto object-contain"
+              priority
+            />
           </Link>
 
           <div className="hidden lg:flex items-center gap-8">
@@ -668,11 +668,14 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 pb-12 border-b border-white/10">
             <div className="md:col-span-2">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-8 h-8 bg-cyan rounded-lg flex items-center justify-center text-navy font-black text-base">
-                  B
-                </div>
-                <span className="font-black text-lg tracking-tighter">BIZLUME HMS</span>
+              <div className="mb-5">
+                <Image
+                  src="/logo-header.png"
+                  alt="Bizlume Technology & Solutions"
+                  width={650}
+                  height={200}
+                  className="h-16 w-auto object-contain brightness-0 invert"
+                />
               </div>
               <p className="text-white/40 text-[13px] font-light leading-relaxed max-w-xs">
                 Modernizing healthcare through intelligent, stable, clinician-first software.
