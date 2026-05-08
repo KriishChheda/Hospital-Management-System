@@ -2,6 +2,9 @@
 
 import React, { useState } from "react";
 import Tesseract from "tesseract.js";
+import { pdf } from "@react-pdf/renderer";
+import PatientRegistrationPDF from "@/components/PatientRegistrationPDF";
+import type { PatientPDFData } from "@/components/PatientRegistrationPDF";
 
 interface PatientForm {
   name: string;
@@ -60,9 +63,8 @@ const STEPS = ["Personal", "Contact & Address", "Emergency & ID", "Medical Histo
 
 // ── Reusable field components (defined outside to keep stable React identity) ──
 function inputCls(field: string, errors: Record<string, string>) {
-  return `w-full p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all text-sm ${
-    errors[field] ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
-  }`;
+  return `w-full p-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all text-sm ${errors[field] ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+    }`;
 }
 
 function ErrMsg({ field, errors }: { field: string; errors: Record<string, string> }) {
@@ -85,6 +87,7 @@ export default function NewPatientPage() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [ocrScanning, setOcrScanning] = useState(false);
+  const [submittedPatient, setSubmittedPatient] = useState<PatientPDFData | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("");
 
   // ── Aadhaar OCR handler ──
@@ -201,9 +204,7 @@ export default function NewPatientPage() {
 
       const result = await response.json();
       if (response.ok) {
-        alert(`Registration successful! Patient ID: ${result.id}`);
-        setForm(INITIAL_FORM);
-        setStep(0);
+        setSubmittedPatient(result);
       } else {
         alert(result.error || "Something went wrong.");
       }
@@ -224,30 +225,77 @@ export default function NewPatientPage() {
         </div>
 
         {/* Step Indicator */}
-        <div className="px-8 pt-6 pb-2">
-          <div className="flex items-center justify-between gap-2">
-            {STEPS.map((s, i) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => { if (i < step) setStep(i); }}
-                className={`flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all ${
-                  i === step ? "bg-cyan text-white shadow-md shadow-cyan/20" :
-                  i < step ? "bg-soft-blue text-navy cursor-pointer hover:bg-cyan/20" :
-                  "bg-light-grey text-grey"
-                }`}
-              >
-                <span className="hidden md:inline">{s}</span>
-                <span className="md:hidden">{i + 1}</span>
-              </button>
-            ))}
+        {!submittedPatient && (
+          <div className="px-8 pt-6 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              {STEPS.map((s, i) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { if (i < step) setStep(i); }}
+                  className={`flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all ${i === step ? "bg-cyan text-white shadow-md shadow-cyan/20" :
+                      i < step ? "bg-soft-blue text-navy cursor-pointer hover:bg-cyan/20" :
+                        "bg-light-grey text-grey"
+                    }`}
+                >
+                  <span className="hidden md:inline">{s}</span>
+                  <span className="md:hidden">{i + 1}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 h-1 bg-light-grey rounded-full overflow-hidden">
+              <div className="h-full bg-cyan rounded-full transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+            </div>
           </div>
-          <div className="mt-3 h-1 bg-light-grey rounded-full overflow-hidden">
-            <div className="h-full bg-cyan rounded-full transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
-          </div>
-        </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="p-8 pt-4">
+        {submittedPatient ? (
+          <div className="p-12 text-center space-y-6 animate-in fade-in zoom-in">
+            <div className="w-20 h-20 bg-status-green/10 text-status-green rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-navy">Registration Successful!</h2>
+            <p className="text-grey max-w-md mx-auto">
+              Patient <span className="font-semibold text-dark">{submittedPatient.name}</span> has been successfully registered with ID: <span className="font-semibold text-dark">{submittedPatient.id}</span>
+            </p>
+            
+            <div className="pt-8 flex flex-col sm:flex-row justify-center gap-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  const blob = await pdf(<PatientRegistrationPDF patient={submittedPatient} />).toBlob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `Patient_Registration_${submittedPatient.id}.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="bg-navy text-white px-8 py-3 rounded-xl font-bold hover:bg-cyan transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download PDF
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(INITIAL_FORM);
+                  setStep(0);
+                  setSubmittedPatient(null);
+                }}
+                className="bg-light-grey text-navy px-8 py-3 rounded-xl font-bold border border-soft-blue hover:bg-soft-blue transition-all active:scale-95"
+              >
+                Register Another
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-8 pt-4">
           {/* ── STEP 0: Personal Information ── */}
           {step === 0 && (
             <div className="space-y-6 animate-in fade-in">
@@ -376,11 +424,10 @@ export default function NewPatientPage() {
               </div>
               {/* OCR Status */}
               {(ocrScanning || ocrStatus) && (
-                <div className={`mt-4 flex items-center gap-3 p-3 rounded-xl border text-sm ${
-                  ocrScanning ? "border-cyan/40 bg-cyan/5 text-cyan" :
-                  ocrStatus.startsWith("✓") ? "border-status-green/40 bg-status-green/5 text-status-green" :
-                  "border-status-orange/40 bg-status-orange/5 text-status-orange"
-                }`}>
+                <div className={`mt-4 flex items-center gap-3 p-3 rounded-xl border text-sm ${ocrScanning ? "border-cyan/40 bg-cyan/5 text-cyan" :
+                    ocrStatus.startsWith("✓") ? "border-status-green/40 bg-status-green/5 text-status-green" :
+                      "border-status-orange/40 bg-status-orange/5 text-status-orange"
+                  }`}>
                   {ocrScanning && (
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -406,17 +453,15 @@ export default function NewPatientPage() {
                 <label className="text-sm font-bold text-dark block mb-3">Existing Conditions</label>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   {CONDITIONS_LIST.map((c) => (
-                    <label key={c} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${
-                      form.existingConditions.includes(c) ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"
-                    }`}>
+                    <label key={c} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${form.existingConditions.includes(c) ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"
+                      }`}>
                       <input type="checkbox" className="accent-cyan w-4 h-4" checked={form.existingConditions.includes(c)} onChange={() => toggleCondition(c)} />
                       {c}
                     </label>
                   ))}
                   {/* Other option */}
-                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${
-                    form.existingConditions.includes("Other") ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"
-                  }`}>
+                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${form.existingConditions.includes("Other") ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"
+                    }`}>
                     <input type="checkbox" className="accent-cyan w-4 h-4" checked={form.existingConditions.includes("Other")} onChange={() => {
                       toggleCondition("Other");
                       if (form.existingConditions.includes("Other")) set("otherCondition", "");
@@ -472,9 +517,8 @@ export default function NewPatientPage() {
               </div>
 
               <div className="space-y-4">
-                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
-                  errors.detailsAccurate ? "border-status-red bg-status-red/5" : form.detailsAccurate ? "border-cyan bg-cyan/5" : "border-soft-blue"
-                }`}>
+                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${errors.detailsAccurate ? "border-status-red bg-status-red/5" : form.detailsAccurate ? "border-cyan bg-cyan/5" : "border-soft-blue"
+                  }`}>
                   <input type="checkbox" className="accent-cyan w-5 h-5 mt-0.5" checked={form.detailsAccurate} onChange={(e) => set("detailsAccurate", e.target.checked)} />
                   <div>
                     <p className="text-sm font-bold text-dark">I confirm the above details are accurate.</p>
@@ -483,9 +527,8 @@ export default function NewPatientPage() {
                 </label>
                 <ErrMsg field="detailsAccurate" errors={errors} />
 
-                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
-                  errors.privacyAccepted ? "border-status-red bg-status-red/5" : form.privacyAccepted ? "border-cyan bg-cyan/5" : "border-soft-blue"
-                }`}>
+                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${errors.privacyAccepted ? "border-status-red bg-status-red/5" : form.privacyAccepted ? "border-cyan bg-cyan/5" : "border-soft-blue"
+                  }`}>
                   <input type="checkbox" className="accent-cyan w-5 h-5 mt-0.5" checked={form.privacyAccepted} onChange={(e) => set("privacyAccepted", e.target.checked)} />
                   <div>
                     <p className="text-sm font-bold text-dark">I accept the Privacy Policy</p>
@@ -515,7 +558,8 @@ export default function NewPatientPage() {
               </button>
             )}
           </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
