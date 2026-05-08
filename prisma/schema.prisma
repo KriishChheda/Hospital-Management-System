@@ -8,11 +8,49 @@ datasource db {
 
 model Patient {
   id        String   @id @default(cuid())
-  name      String
-  age       Int
-  gender    String
-  phone     String   @unique
   createdAt DateTime @default(now())
+
+  // ── Personal Information ──
+  name          String
+  age           Int
+  gender        String
+  dateOfBirth   String   @default("")
+  bloodGroup    String?
+  maritalStatus String?
+  nationality   String   @default("Indian")
+
+  // ── Contact Information ──
+  phone          String  @unique
+  alternatePhone String?
+  email          String?
+
+  // ── Address ──
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  pincode      String?
+  country      String  @default("India")
+
+  // ── Emergency Contact ──
+  emergencyContactName         String?
+  emergencyContactRelationship String?
+  emergencyContactPhone        String?
+
+  // ── Identification ──
+  aadhaarNumber String? @unique
+  aadhaarDocUrl String?
+
+  // ── Medical History ──
+  allergies          String?
+  existingConditions String[] // e.g. ["Diabetes", "Hypertension"]
+  currentMedications String?
+  pastSurgeries      String?
+  disabilityInfo     String?
+
+  // ── Consent ──
+  detailsAccurate    Boolean @default(false)
+  privacyAccepted    Boolean @default(false)
 }
 
 enum Role {
