@@ -51,6 +51,8 @@ model Patient {
   // ── Consent ──
   detailsAccurate    Boolean @default(false)
   privacyAccepted    Boolean @default(false)
+
+  prescriptions  Prescription[]
 }
 
 enum Role {
@@ -70,4 +72,103 @@ model User {
   role       Role
   status     Boolean  @default(false) // false = Pending, true = Approved
   createdAt  DateTime @default(now())
+}
+
+model Medicine {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  name           String
+  genericName    String?
+  category       String   // e.g. "Antibiotic", "Analgesic"
+  manufacturer   String?
+  batchNumber    String?
+  barcode        String?  @unique
+
+  // Stock
+  currentStock   Int      @default(0)
+  minStockLevel  Int      @default(10)   // triggers low-stock alert
+  unit           String   @default("tablets") // tablets, ml, capsules, etc.
+  pricePerUnit   Float    @default(0)
+
+  // Expiry
+  expiryDate     DateTime?
+  manufactureDate DateTime?
+
+  // Relations
+  prescriptionItems PrescriptionItem[]
+  activityLogs      PharmacistLog[]
+}
+
+enum PrescriptionStatus {
+  PENDING
+  DISPENSED
+  CANCELLED
+  PARTIAL
+}
+
+model Prescription {
+  id          String             @id @default(cuid())
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  patientId   String
+  patient     Patient            @relation(fields: [patientId], references: [id])
+
+  doctorId    String?            // links to User with role DOCTOR
+  doctorName  String?            // denormalized for display speed
+
+  visitId     String?            // for EMR visit grouping
+  notes       String?
+  status      PrescriptionStatus @default(PENDING)
+
+  items       PrescriptionItem[]
+  logs        PharmacistLog[]
+  billing     PharmacyBilling?
+}
+
+model PrescriptionItem {
+  id             String       @id @default(cuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+
+  medicineId     String
+  medicine       Medicine     @relation(fields: [medicineId], references: [id])
+
+  dosage         String       // e.g. "500mg"
+  frequency      String       // e.g. "Twice daily"
+  duration       String       // e.g. "7 days"
+  quantity       Int          // units to dispense
+  dispensed      Int          @default(0)
+  instructions   String?
+}
+
+model PharmacistLog {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+
+  pharmacistId   String    // User id
+  pharmacistName String
+
+  action         String    // "DISPENSED", "UPDATED_STOCK", "ADDED_MEDICINE", etc.
+  details        String?
+
+  prescriptionId String?
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+
+  medicineId     String?
+  medicine       Medicine?     @relation(fields: [medicineId], references: [id])
+}
+
+model PharmacyBilling {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+
+  prescriptionId String   @unique
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+
+  totalAmount    Float
+  paid           Boolean  @default(false)
+  paymentMethod  String?  // "Cash", "Card", "Insurance"
 }
