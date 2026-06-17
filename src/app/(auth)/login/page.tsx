@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -56,6 +56,9 @@ export default function LoginPage() {
         case "PHARMACIST":
           router.push("/inventory");
           break;
+        case "LAB_TECHNICIAN":
+          router.push("/lab-dashboard");
+          break;
         default:
           setError("Role not recognized.");
       }
@@ -70,18 +73,18 @@ export default function LoginPage() {
     <div className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden bg-navy">
       {/* Animated Background */}
       <div className="absolute inset-0 z-0">
-        <ShapeGrid 
-          shape="circle" 
-          speed={0.5} 
-          squareSize={40} 
-          borderColor="rgba(230, 244, 248, 0.15)" 
+        <ShapeGrid
+          shape="circle"
+          speed={0.5}
+          squareSize={40}
+          borderColor="rgba(230, 244, 248, 0.15)"
           hoverFillColor="#00b4d8"
           backgroundColor="#0a1d30"
           hoverTrailAmount={5}
         />
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-white/95 backdrop-blur-2xl rounded-3xl shadow-[0_0_40px_rgba(0,180,216,0.15)] border border-cyan/30 overflow-hidden z-10"
@@ -100,8 +103,8 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div className="space-y-1">
               <label className="text-xs font-bold text-grey uppercase ml-1">Email Address</label>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -112,8 +115,8 @@ export default function LoginPage() {
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-grey uppercase ml-1">Password</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -134,7 +137,7 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          <motion.button 
+          <motion.button
             type="submit"
             disabled={loading}
             whileHover={{ scale: 1.01 }}

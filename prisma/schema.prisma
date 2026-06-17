@@ -53,6 +53,8 @@ model Patient {
   privacyAccepted    Boolean @default(false)
 
   prescriptions  Prescription[]
+  emrVisits     EMRVisit[]      // Added
+  labOrders     LabOrder[]      // Added
 }
 
 enum Role {
@@ -61,6 +63,7 @@ enum Role {
   NURSE
   RECEPTIONIST
   PHARMACIST
+  LAB_TECHNICIAN
 }
 
 model User {
@@ -171,4 +174,79 @@ model PharmacyBilling {
   totalAmount    Float
   paid           Boolean  @default(false)
   paymentMethod  String?  // "Cash", "Card", "Insurance"
+}
+
+// ── NEW: EMR Medical Visit Tracking ──
+model EMRVisit {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  
+  doctorId      String
+  doctorName    String
+
+  // Vital signs checked by nurse during triage
+  bloodPressure String?
+  temperature   String?
+  heartRate     String?
+  respiratoryRate String?
+  weight        String?
+
+  // Clinical Consultation Notes
+  chiefComplaint String
+  clinicalNotes  String   @db.Text
+  diagnosis      String?
+  aiSuggestions  String?  @db.Text // Cached AI Analysis output
+  
+  // Digital Printable Board Customizations
+  customHeader   String?  @default("CITY GENERAL HOSPITAL - OUTPATIENT DEPARTMENT")
+  customFooter   String?  @default("Please bring this prescription note on your next visit.")
+}
+
+// ── NEW: Laboratory Orders Dashboard Integration ──
+enum LabOrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model LabOrder {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  patientId     String
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  
+  doctorId      String
+  doctorName    String
+  
+  testName      String         // e.g., "Complete Blood Count (CBC)", "X-Ray Chest"
+  category      String         // e.g., "Blood", "Radiology", "Urinalysis"
+  status        LabOrderStatus @default(PENDING)
+  resultNotes   String?        @db.Text
+  flaggedAlert  Boolean        @default(false) // Highlights critical abnormalities
+}
+
+// ── Doctor Profile & Availability ──
+model DoctorProfile {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userId          String   @unique          // links to User with role DOCTOR
+  fullName        String
+  specialization  String                    // e.g., "Cardiologist", "Radiologist"
+  qualification   String?                   // e.g., "MBBS, MD"
+  experience      Int?                      // years of experience
+  phone           String?
+  consultationFee Float?
+
+  availableNow    Boolean  @default(false)  // live on/off toggle
+
+  // Weekly time slots stored as JSON: { "monday": ["09:00-12:00","14:00-17:00"], ... }
+  weeklySlots     Json     @default("{}")
 }

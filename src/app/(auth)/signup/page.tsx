@@ -123,6 +123,7 @@ export default function SignupPage() {
                 <option value="NURSE">Nurse</option>
                 <option value="RECEPTIONIST">Receptionist</option>
                 <option value="PHARMACIST">Pharmacist</option>
+                <option value="LAB_TECHNICIAN">Lab Technician</option>
                 <option value="ADMIN">Admin</option>
               </select>
             </div>
