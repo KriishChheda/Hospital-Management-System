@@ -55,6 +55,10 @@ model Patient {
   detailsAccurate    Boolean @default(false)
   privacyAccepted    Boolean @default(false)
 
+  // ── Billing ──
+  paymentStatus      Boolean @default(false)
+  registrationFee    Float   @default(500.0)
+
   prescriptions  Prescription[]
   emrVisits     EMRVisit[]      // Added
   labOrders     LabOrder[]      // Added

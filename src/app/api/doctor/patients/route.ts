@@ -15,6 +15,7 @@ export async function GET() {
                 bloodGroup: true,
                 createdAt: true,
                 existingConditions: true,
+                paymentStatus: true,
             },
         });
 
@@ -51,6 +52,7 @@ export async function GET() {
                 waiting,
                 existingConditions: p.existingConditions,
                 createdAt: p.createdAt,
+                paymentStatus: p.paymentStatus,
             };
         });
 

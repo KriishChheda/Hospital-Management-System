@@ -16,6 +16,7 @@ interface TriagePatient {
     waiting: string;
     existingConditions: string[];
     createdAt: string;
+    paymentStatus: boolean;
 }
 
 type FilterType = "all" | "danger" | "warning" | "normal";
@@ -96,13 +97,17 @@ export default function DoctorDashboard() {
     const [refreshing, setRefreshing] = useState(false);
 
     // Compute real stats from patient data
-    const totalPatients = patients.length;
-    const criticalCount = patients.filter(p => p.alertType === "danger").length;
+    // "Registered today" considers ALL patients regardless of payment status
     const todayCount = patients.filter(p => {
         const created = new Date(p.createdAt);
         const today = new Date();
         return created.toDateString() === today.toDateString();
     }).length;
+
+    // Active queue and Critical alerts only consider patients who HAVEN'T paid yet
+    const activePatients = patients.filter(p => !p.paymentStatus);
+    const totalPatients = activePatients.length;
+    const criticalCount = activePatients.filter(p => p.alertType === "danger").length;
 
     const animatedTotal = useCountUp(totalPatients, 500, cardsVisible);
     const animatedCritical = useCountUp(criticalCount, 400, cardsVisible);
@@ -138,13 +143,13 @@ export default function DoctorDashboard() {
     useEffect(() => {
         if (loading) return;
         setRowsVisible([]);
-        const filtered = patients.filter(p => filter === "all" || p.alertType === filter);
+        const filtered = activePatients.filter(p => filter === "all" || p.alertType === filter);
         filtered.forEach((_, i) => {
             setTimeout(() => setRowsVisible(prev => { const next = [...prev]; next[i] = true; return next; }), i * 80);
         });
     }, [patients, filter, loading]);
 
-    const filtered = patients.filter(p => filter === "all" || p.alertType === filter);
+    const filtered = activePatients.filter(p => filter === "all" || p.alertType === filter);
 
     const STAT_CARDS = [
         { label: "Active patients", value: `${animatedTotal} registered`, icon: "👥", bg: "bg-blue-50   dark:bg-blue-950", text: "text-blue-600   dark:text-blue-400" },
@@ -233,7 +238,7 @@ export default function DoctorDashboard() {
                                 {tab.label}
                                 {tab.value !== "all" && (
                                     <span className="ml-1 opacity-60">
-                                        ({patients.filter(p => p.alertType === tab.value).length})
+                                        ({activePatients.filter(p => p.alertType === tab.value).length})
                                     </span>
                                 )}
                             </button>
