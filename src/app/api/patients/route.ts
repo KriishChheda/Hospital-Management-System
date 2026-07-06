@@ -18,6 +18,8 @@ export async function POST(request: Request) {
             aadhaarNumber, aadhaarDocUrl,
             // Medical
             allergies, existingConditions, currentMedications, pastSurgeries, disabilityInfo,
+            // Critical Level
+            critical,
             // Consent
             detailsAccurate, privacyAccepted,
         } = body;
@@ -88,6 +90,8 @@ export async function POST(request: Request) {
                 currentMedications: currentMedications || null,
                 pastSurgeries: pastSurgeries || null,
                 disabilityInfo: disabilityInfo || null,
+
+                critical: critical || "low",
 
                 detailsAccurate: Boolean(detailsAccurate),
                 privacyAccepted: Boolean(privacyAccepted),

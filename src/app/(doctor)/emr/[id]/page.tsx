@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import Link from "next/link";
 
 interface RouteParams { id: string; }
@@ -16,17 +16,41 @@ const EditIcon = () => (<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="n
 const TrashIcon = () => (<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
 const CheckIcon = () => (<svg className="w-4 h-4 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>);
 
+interface PatientData {
+    name: string; age: number; gender: string; bloodGroup: string | null;
+    phone: string; critical: string;
+    addressLine1: string | null; addressLine2: string | null; city: string | null; state: string | null; pincode: string | null;
+    allergies: string | null; existingConditions: string[]; currentMedications: string | null;
+    pastSurgeries: string | null; disabilityInfo: string | null;
+    maritalStatus: string | null; email: string | null;
+}
+
 export default function PatientEMRPage({ params }: { params: Promise<RouteParams> }) {
     const resolvedParams = use(params);
     const patientId = resolvedParams.id;
 
-    const [patientData] = useState({
-        name: "Rohan Sharma", age: 34, gender: "Male", bloodGroup: "O+",
-        phone: "9876543210", address: "Flat 402, Skyline Residency, Mumbai, Maharashtra - 400001",
-        pastIllnesses: "Chronic Mild Asthma", surgeries: "Appendectomy (2018)",
-        currentMedications: "Salbutamol Inhaler on-demand", drugAllergies: "Amoxicillin Penicillins",
-        labResults: "Blood Sugar Fasting: 98 mg/dL (Normal), WBC count normal", billingStatus: "Corporate Insurance Active"
-    });
+    const [patientData, setPatientData] = useState<PatientData | null>(null);
+    const [fetchLoading, setFetchLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+
+    useEffect(() => {
+        async function loadPatient() {
+            try {
+                const res = await fetch(`/api/doctor/patients/${patientId}`);
+                if (!res.ok) {
+                    setFetchError(res.status === 404 ? "Patient not found" : "Failed to load patient");
+                    return;
+                }
+                const data = await res.json();
+                setPatientData(data);
+            } catch {
+                setFetchError("Could not connect to server");
+            } finally {
+                setFetchLoading(false);
+            }
+        }
+        loadPatient();
+    }, [patientId]);
 
     const [chiefComplaint, setChiefComplaint] = useState("");
     const [clinicalNotes, setClinicalNotes] = useState("");
@@ -47,11 +71,16 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
     const getAISuggestions = () => {
         if (!chiefComplaint && !clinicalNotes) return "AI Copilot: Update context fields or symptoms to prompt automated diagnostic warnings.";
         let checks: string[] = [];
-        if (patientData.drugAllergies.toLowerCase().includes("penicillin")) {
+        const allergies = patientData?.allergies?.toLowerCase() || "";
+        if (allergies.includes("penicillin") || allergies.includes("amoxicillin")) {
             checks.push("ALLERGY WARNING: Background records indicate a severe allergic reaction history to Penicillin / Amoxicillin family variants.");
         }
         if (clinicalNotes.toLowerCase().includes("cough") || clinicalNotes.toLowerCase().includes("wheezing")) {
-            checks.push("CLINICAL INSIGHT: Given active history of Mild Asthma, favor bronchodilators over standard system Beta-blockers.");
+            const hasAsthma = patientData?.existingConditions?.some(c => c.toLowerCase().includes("asthma"));
+            if (hasAsthma) checks.push("CLINICAL INSIGHT: Given active history of Asthma, favor bronchodilators over standard system Beta-blockers.");
+        }
+        if (patientData?.critical === "high") {
+            checks.push("⚠ PRIORITY: This patient is flagged as HIGH CRITICAL at registration. Prioritize immediate assessment.");
         }
         return checks.length > 0 ? checks.join("\n\n") : "Clinical checks standard. No system contraindications flagged.";
     };
@@ -107,6 +136,31 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
         setTimeout(() => setDispatched(false), 2000);
     };
 
+    if (fetchLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-3">
+                    <div className="w-8 h-8 border-2 border-navy border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p className="text-sm text-grey font-semibold">Loading patient record…</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (fetchError || !patientData) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-3">
+                    <p className="text-lg font-bold text-status-red">{fetchError || "Patient not found"}</p>
+                    <Link href="/doctor-dashboard" className="text-xs font-bold text-navy hover:underline">← Back to Dashboard</Link>
+                </div>
+            </div>
+        );
+    }
+
+    const address = [patientData.addressLine1, patientData.addressLine2, patientData.city, patientData.state, patientData.pincode].filter(Boolean).join(", ") || "Not provided";
+    const criticalBadge = patientData.critical === "high" ? "bg-red-100 text-red-700" : patientData.critical === "medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
+
     return (
         <div className="space-y-8 print-wrapper">
             {/* Top Command Actions */}
@@ -115,9 +169,14 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                     <Link href="/doctor-dashboard" className="text-xs font-bold text-navy hover:underline">&larr; Back to Dashboard Queue</Link>
                     <h1 className="text-2xl font-black text-navy mt-1">EMR Workstation</h1>
                 </div>
-                <button onClick={() => window.print()} className="bg-navy hover:bg-navy/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center">
-                    <PrinterIcon /> Print Prescription Summary
-                </button>
+                <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg ${criticalBadge}`}>
+                        {patientData.critical} priority
+                    </span>
+                    <button onClick={() => window.print()} className="bg-navy hover:bg-navy/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center">
+                        <PrinterIcon /> Print Prescription Summary
+                    </button>
+                </div>
             </div>
 
             {/* Patient Summary Grid */}
@@ -125,30 +184,45 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                 <div className="space-y-1">
                     <p className="text-xs font-bold text-grey uppercase tracking-wide">Patient Demographics</p>
                     <h2 className="text-lg font-black text-navy">{patientData.name}</h2>
-                    <p className="text-xs font-bold text-grey">{patientData.gender} &bull; {patientData.age} Years &bull; Blood Group: {patientData.bloodGroup}</p>
-                    <p className="text-xs text-grey">{patientData.phone}</p>
-                    <p className="text-[11px] text-grey leading-tight mt-1">{patientData.address}</p>
+                    <p className="text-xs font-bold text-grey">{patientData.gender} &bull; {patientData.age} Years{patientData.bloodGroup ? ` • Blood Group: ${patientData.bloodGroup}` : ""}</p>
+                    <p className="text-xs text-grey">{patientData.phone}{patientData.email ? ` • ${patientData.email}` : ""}</p>
+                    <p className="text-[11px] text-grey leading-tight mt-1">{address}</p>
                 </div>
                 <div className="space-y-2 border-l border-soft-blue pl-6">
                     <div>
-                        <span className="text-xs font-bold text-grey block uppercase tracking-wide">Medical History Base</span>
-                        <p className="text-xs font-medium text-navy">Illnesses: <span className="text-grey font-semibold">{patientData.pastIllnesses}</span></p>
-                        <p className="text-xs font-medium text-navy">Surgeries: <span className="text-grey font-semibold">{patientData.surgeries}</span></p>
+                        <span className="text-xs font-bold text-grey block uppercase tracking-wide">Medical History</span>
+                        {patientData.existingConditions.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                                {patientData.existingConditions.map((c, i) => (
+                                    <span key={i} className="text-[10px] font-bold bg-soft-blue text-navy px-2 py-0.5 rounded-md">{c}</span>
+                                ))}
+                            </div>
+                        ) : <p className="text-xs text-grey font-semibold">No existing conditions</p>}
+                        <p className="text-xs font-medium text-navy mt-1">Surgeries: <span className="text-grey font-semibold">{patientData.pastSurgeries || "None"}</span></p>
                     </div>
                     <div>
                         <span className="text-xs font-bold text-status-red block uppercase tracking-wide"><AlertIcon /> Active Allergy Risks</span>
-                        <p className="text-xs font-bold text-status-red bg-red-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{patientData.drugAllergies}</p>
+                        {patientData.allergies ? (
+                            <p className="text-xs font-bold text-status-red bg-red-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{patientData.allergies}</p>
+                        ) : (
+                            <p className="text-xs text-grey font-semibold mt-0.5">No known allergies</p>
+                        )}
                     </div>
                 </div>
                 <div className="space-y-2 border-l border-soft-blue pl-6">
                     <div>
-                        <span className="text-xs font-bold text-grey block uppercase tracking-wide">Current Medications &amp; Labs</span>
-                        <p className="text-xs text-grey font-semibold">{patientData.currentMedications}</p>
-                        <p className="text-[11px] text-grey mt-1 leading-normal bg-light-grey p-1.5 rounded border">{patientData.labResults}</p>
+                        <span className="text-xs font-bold text-grey block uppercase tracking-wide">Current Medications</span>
+                        <p className="text-xs text-grey font-semibold">{patientData.currentMedications || "None reported"}</p>
                     </div>
+                    {patientData.disabilityInfo && (
+                        <div>
+                            <span className="text-xs font-bold text-grey block uppercase tracking-wide">Disability Info</span>
+                            <p className="text-xs text-grey font-semibold">{patientData.disabilityInfo}</p>
+                        </div>
+                    )}
                     <div className="pt-1">
-                        <span className="text-[10px] font-bold text-grey block uppercase tracking-wide">Insurance / Claims Processing</span>
-                        <p className="text-xs text-navy font-bold">{patientData.billingStatus}</p>
+                        <span className="text-[10px] font-bold text-grey block uppercase tracking-wide">Patient ID</span>
+                        <p className="text-xs text-navy font-bold font-mono">{patientId}</p>
                     </div>
                 </div>
             </div>
@@ -281,8 +355,8 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                             <p className="text-[9px] text-grey font-bold tracking-wider mt-0.5">Clinical Outpatient Consultation Sheet</p>
                         </div>
                         <div className="grid grid-cols-2 gap-y-2 py-4 text-[11px] font-bold border-b border-light-grey">
-                            <p><span className="text-grey font-bold">Patient Name:</span> {patientData.name}</p>
-                            <p><span className="text-grey font-bold">Age / Gender:</span> {patientData.age} / {patientData.gender}</p>
+                            <p><span className="text-grey font-bold">Patient Name:</span> {patientData?.name}</p>
+                            <p><span className="text-grey font-bold">Age / Gender:</span> {patientData?.age} / {patientData?.gender}</p>
                             <p className="col-span-2"><span className="text-grey font-bold">Chief Complaint:</span> <span className="font-semibold text-navy">{chiefComplaint || "None recorded."}</span></p>
                             <p className="col-span-2"><span className="text-grey font-bold">Primary Diagnosis:</span> <span className="font-semibold text-navy">{diagnosis || "Awaiting observation input logs."}</span></p>
                             <p className="col-span-2"><span className="text-grey font-bold">Observations Summary:</span> <span className="font-semibold text-grey">{clinicalNotes || "No clinical data written yet."}</span></p>

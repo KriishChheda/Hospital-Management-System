@@ -13,6 +13,7 @@ export interface PatientPDFData {
   bloodGroup?: string;
   maritalStatus?: string;
   nationality?: string;
+  critical?: string;
   phone: string;
   alternatePhone?: string;
   email?: string;
@@ -218,6 +219,7 @@ export default function PatientRegistrationPDF({ patient }: { patient: PatientPD
           </View>
           <View style={styles.row}>
             <FieldItem label="NATIONALITY" value={patient.nationality} />
+            <FieldItem label="CRITICAL LEVEL" value={patient.critical ? patient.critical.toUpperCase() : "LOW"} />
           </View>
         </View>
 

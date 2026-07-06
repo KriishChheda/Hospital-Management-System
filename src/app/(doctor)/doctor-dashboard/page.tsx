@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 
 // ── Types ──
@@ -9,19 +9,16 @@ interface TriagePatient {
     age: number;
     gender: string;
     phone: string;
+    bloodGroup: string | null;
+    critical: string;
     vitalsStatus: string;
     alertType: "normal" | "danger" | "warning";
     waiting: string;
+    existingConditions: string[];
+    createdAt: string;
 }
 
 type FilterType = "all" | "danger" | "warning" | "normal";
-
-// ── Mock data ──
-const MOCK_PATIENTS: TriagePatient[] = [
-    { id: "cm-101", name: "Rohan Sharma", age: 34, gender: "Male", phone: "98765 43210", vitalsStatus: "High blood pressure alert", alertType: "danger", waiting: "18 min" },
-    { id: "cm-102", name: "Anjali Desai", age: 29, gender: "Female", phone: "91234 56789", vitalsStatus: "Vitals stable", alertType: "normal", waiting: "6 min" },
-    { id: "cm-103", name: "Vikram Malhotra", age: 52, gender: "Male", phone: "93456 78901", vitalsStatus: "Fever spiking", alertType: "warning", waiting: "31 min" },
-];
 
 // ── Animated counter hook ──
 function useCountUp(target: number, duration = 600, enabled = false) {
@@ -67,6 +64,20 @@ function VitalsBadge({ status, type }: { status: string; type: TriagePatient["al
     );
 }
 
+function CriticalBadge({ level }: { level: string }) {
+    const config: Record<string, { bg: string; text: string; label: string }> = {
+        high: { bg: "bg-red-100 dark:bg-red-950", text: "text-red-700 dark:text-red-400", label: "HIGH" },
+        medium: { bg: "bg-amber-100 dark:bg-amber-950", text: "text-amber-700 dark:text-amber-400", label: "MEDIUM" },
+        low: { bg: "bg-emerald-100 dark:bg-emerald-950", text: "text-emerald-700 dark:text-emerald-400", label: "LOW" },
+    };
+    const c = config[level] || config.low;
+    return (
+        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide ${c.bg} ${c.text}`}>
+            {c.label}
+        </span>
+    );
+}
+
 const FILTER_TABS: { label: string; value: FilterType }[] = [
     { label: "All", value: "all" },
     { label: "Critical", value: "danger" },
@@ -82,21 +93,46 @@ export default function DoctorDashboard() {
     const [mounted, setMounted] = useState(false);
     const [cardsVisible, setCardsVisible] = useState(false);
     const [rowsVisible, setRowsVisible] = useState<boolean[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const queueCount = useCountUp(3, 500, cardsVisible);
-    const doneCount = useCountUp(12, 700, cardsVisible);
-    const alertCount = useCountUp(1, 400, cardsVisible);
+    // Compute real stats from patient data
+    const totalPatients = patients.length;
+    const criticalCount = patients.filter(p => p.alertType === "danger").length;
+    const todayCount = patients.filter(p => {
+        const created = new Date(p.createdAt);
+        const today = new Date();
+        return created.toDateString() === today.toDateString();
+    }).length;
 
-    useEffect(() => {
-        // Kick off entrance animations
-        requestAnimationFrame(() => setMounted(true));
+    const animatedTotal = useCountUp(totalPatients, 500, cardsVisible);
+    const animatedCritical = useCountUp(criticalCount, 400, cardsVisible);
+    const animatedToday = useCountUp(todayCount, 600, cardsVisible);
 
-        setTimeout(() => {
-            setPatients(MOCK_PATIENTS);
+    const fetchPatients = useCallback(async (showRefresh = false) => {
+        if (showRefresh) setRefreshing(true);
+        try {
+            const res = await fetch("/api/doctor/patients");
+            if (res.ok) {
+                const data = await res.json();
+                setPatients(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch patients:", err);
+        } finally {
             setLoading(false);
             setCardsVisible(true);
-        }, 200);
+            if (showRefresh) setRefreshing(false);
+        }
     }, []);
+
+    useEffect(() => {
+        requestAnimationFrame(() => setMounted(true));
+        fetchPatients();
+
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(() => fetchPatients(), 30000);
+        return () => clearInterval(interval);
+    }, [fetchPatients]);
 
     // Stagger row reveal whenever patient list changes
     useEffect(() => {
@@ -111,9 +147,9 @@ export default function DoctorDashboard() {
     const filtered = patients.filter(p => filter === "all" || p.alertType === filter);
 
     const STAT_CARDS = [
-        { label: "Active queue", value: `${queueCount} patients`, icon: "⏱", bg: "bg-blue-50   dark:bg-blue-950", text: "text-blue-600   dark:text-blue-400" },
-        { label: "Completed today", value: `${doneCount} consultations`, icon: "✓", bg: "bg-emerald-50 dark:bg-emerald-950", text: "text-emerald-600 dark:text-emerald-400" },
-        { label: "Critical alerts", value: `${alertCount} active`, icon: "⚠", bg: "bg-red-50   dark:bg-red-950", text: "text-red-600   dark:text-red-400" },
+        { label: "Active patients", value: `${animatedTotal} registered`, icon: "👥", bg: "bg-blue-50   dark:bg-blue-950", text: "text-blue-600   dark:text-blue-400" },
+        { label: "Registered today", value: `${animatedToday} patients`, icon: "📋", bg: "bg-emerald-50 dark:bg-emerald-950", text: "text-emerald-600 dark:text-emerald-400" },
+        { label: "Critical alerts", value: `${animatedCritical} active`, icon: "⚠", bg: "bg-red-50   dark:bg-red-950", text: "text-red-600   dark:text-red-400" },
     ];
 
     return (
@@ -128,10 +164,22 @@ export default function DoctorDashboard() {
                     <h1 className="text-xl font-semibold text-gray-950 dark:text-gray-100 tracking-tight">Doctor dashboard</h1>
                     <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Real-time consultation worklist · EMR management · Diagnostic orders</p>
                 </div>
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-3 py-1">
-                    <PulseDot />
-                    Live
-                </span>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => fetchPatients(true)}
+                        disabled={refreshing}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all duration-150 disabled:opacity-50"
+                    >
+                        <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+                        </svg>
+                        {refreshing ? "Refreshing…" : "Refresh"}
+                    </button>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-3 py-1">
+                        <PulseDot />
+                        Live
+                    </span>
+                </div>
             </header>
 
             {/* ── Stat cards ── */}
@@ -169,8 +217,8 @@ export default function DoctorDashboard() {
                 {/* Table header */}
                 <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
                     <div>
-                        <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-100">Checked-in consultation queue</h2>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Open a patient record to manage prescriptions, labs, and notes</p>
+                        <h2 className="text-sm font-semibold text-gray-950 dark:text-gray-100">Registered patients</h2>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">All patients registered via reception desk · Click to open EMR</p>
                     </div>
                     <div className="flex gap-1">
                         {FILTER_TABS.map(tab => (
@@ -183,6 +231,11 @@ export default function DoctorDashboard() {
                                     }`}
                             >
                                 {tab.label}
+                                {tab.value !== "all" && (
+                                    <span className="ml-1 opacity-60">
+                                        ({patients.filter(p => p.alertType === tab.value).length})
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -190,22 +243,23 @@ export default function DoctorDashboard() {
 
                 {/* Table */}
                 {loading ? (
-                    <div className="py-10 text-center text-sm text-gray-600 dark:text-gray-400">Loading clinic queue…</div>
+                    <div className="py-10 text-center text-sm text-gray-600 dark:text-gray-400">Loading patient list…</div>
                 ) : filtered.length === 0 ? (
                     <div className="py-10 text-center text-sm text-gray-600 dark:text-gray-400">No patients in this category</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left" style={{ tableLayout: "fixed" }}>
                             <colgroup>
-                                <col style={{ width: "30%" }} />
-                                <col style={{ width: "18%" }} />
-                                <col style={{ width: "24%" }} />
-                                <col style={{ width: "14%" }} />
-                                <col style={{ width: "14%" }} />
+                                <col style={{ width: "28%" }} />
+                                <col style={{ width: "15%" }} />
+                                <col style={{ width: "12%" }} />
+                                <col style={{ width: "20%" }} />
+                                <col style={{ width: "12%" }} />
+                                <col style={{ width: "13%" }} />
                             </colgroup>
                             <thead>
                                 <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
-                                    {["Patient", "Contact", "Triage status", "Waiting", ""].map(h => (
+                                    {["Patient", "Contact", "Critical", "Triage status", "Registered", ""].map(h => (
                                         <th key={h} className={`text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide px-4 py-2.5 ${h === "" ? "text-right pr-5" : ""} first:pl-0`}>
                                             {h}
                                         </th>
@@ -229,7 +283,9 @@ export default function DoctorDashboard() {
                                                 <UrgencyBar type={p.alertType} />
                                                 <div>
                                                     <p className="text-sm font-semibold text-gray-950 dark:text-gray-100">{p.name}</p>
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 font-mono">{p.gender} · {p.age} yrs · {p.id.toUpperCase()}</p>
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 font-mono">
+                                                        {p.gender} · {p.age} yrs{p.bloodGroup ? ` · ${p.bloodGroup}` : ""}
+                                                    </p>
                                                 </div>
                                             </div>
                                         </td>
@@ -237,11 +293,15 @@ export default function DoctorDashboard() {
                                         <td className="py-3.5 px-4">
                                             <span className="text-sm text-gray-700 dark:text-gray-400 font-mono">{p.phone}</span>
                                         </td>
+                                        {/* Critical */}
+                                        <td className="py-3.5 px-4">
+                                            <CriticalBadge level={p.critical} />
+                                        </td>
                                         {/* Vitals */}
                                         <td className="py-3.5 px-4">
                                             <VitalsBadge status={p.vitalsStatus} type={p.alertType} />
                                         </td>
-                                        {/* Waiting */}
+                                        {/* Waiting / Registered */}
                                         <td className="py-3.5 px-4">
                                             <span className="text-sm text-gray-700 dark:text-gray-400 font-mono">{p.waiting}</span>
                                         </td>

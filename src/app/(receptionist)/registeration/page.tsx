@@ -34,6 +34,7 @@ interface PatientForm {
   currentMedications: string;
   pastSurgeries: string;
   disabilityInfo: string;
+  critical: "high" | "medium" | "low";
   detailsAccurate: boolean;
   privacyAccepted: boolean;
 }
@@ -45,6 +46,7 @@ const INITIAL_FORM: PatientForm = {
   emergencyContactName: "", emergencyContactRelationship: "", emergencyContactPhone: "",
   aadhaarNumber: "", aadhaarFile: null,
   allergies: "", existingConditions: [], otherCondition: "", currentMedications: "", pastSurgeries: "", disabilityInfo: "",
+  critical: "low",
   detailsAccurate: false, privacyAccepted: false,
 };
 
@@ -468,6 +470,17 @@ export default function NewPatientPage() {
                       }} />
                       Other
                     </label>
+                    <Field label="Critical Level" field="critical" required errors={errors}>
+                      <div className="relative">
+                        <select className={inputCls("critical", errors)} value={form.critical} onChange={(e) => set("critical", e.target.value)}>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                        <div className={`absolute right-4.5 top-1/2 -translate-y-1 w-2.5 h-2.5 rounded-full pointer-events-none ${form.critical === "high" ? "bg-red-500" : form.critical === "medium" ? "bg-yellow-400" : "bg-green-500"
+                          }`} />
+                      </div>
+                    </Field>
                   </div>
                   {form.existingConditions.includes("Other") && (
                     <input
@@ -510,6 +523,8 @@ export default function NewPatientPage() {
                     <p><span className="font-semibold text-dark">Phone:</span> {form.phone || "—"}</p>
                     <p><span className="font-semibold text-dark">City:</span> {form.city || "—"}</p>
                     <p><span className="font-semibold text-dark">Blood Group:</span> {form.bloodGroup || "—"}</p>
+                    <p><span className="font-semibold text-dark">Critical:</span> <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold uppercase ${form.critical === "high" ? "bg-red-100 text-red-700" : form.critical === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"
+                      }`}>{form.critical}</span></p>
                     {form.existingConditions.length > 0 && (
                       <p className="col-span-full"><span className="font-semibold text-dark">Conditions:</span> {form.existingConditions.join(", ")}</p>
                     )}

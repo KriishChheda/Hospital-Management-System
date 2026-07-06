@@ -48,6 +48,9 @@ model Patient {
   pastSurgeries      String?
   disabilityInfo     String?
 
+  // ── Critical Level ──
+  critical           String  @default("low") // "high", "medium", "low"
+
   // ── Consent ──
   detailsAccurate    Boolean @default(false)
   privacyAccepted    Boolean @default(false)
