@@ -18,7 +18,7 @@ export async function GET(request: Request) {
             include: {
                 prescription: {
                     select: {
-                        patient: { select: { name: true } },
+                        visit: { select: { patient: { select: { name: true } } } },
                         status: true,
                     },
                 },

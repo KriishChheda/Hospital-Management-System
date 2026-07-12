@@ -3,11 +3,12 @@ import prisma from "@/lib/db";
 
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const medicine = await prisma.medicine.findUnique({
-            where: { id: params.id },
+            where: { id },
             include: {
                 prescriptionItems: {
                     include: {
@@ -15,7 +16,7 @@ export async function GET(
                             select: {
                                 createdAt: true,
                                 status: true,
-                                patient: { select: { name: true } },
+                                visit: { select: { patient: { select: { name: true } } } },
                             },
                         },
                     },
@@ -38,13 +39,14 @@ export async function GET(
 
 export async function PATCH(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const body = await request.json();
 
         // Check medicine exists
-        const existing = await prisma.medicine.findUnique({ where: { id: params.id } });
+        const existing = await prisma.medicine.findUnique({ where: { id } });
         if (!existing) {
             return NextResponse.json({ error: "Medicine not found." }, { status: 404 });
         }
@@ -80,7 +82,7 @@ export async function PATCH(
         const { id: _id, createdAt: _c, prescriptionItems: _p, ...updateData } = body;
 
         const updated = await prisma.medicine.update({
-            where: { id: params.id },
+            where: { id },
             data: updateData,
         });
 
@@ -101,15 +103,16 @@ export async function PATCH(
 
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const existing = await prisma.medicine.findUnique({ where: { id: params.id } });
+        const { id } = await params;
+        const existing = await prisma.medicine.findUnique({ where: { id } });
         if (!existing) {
             return NextResponse.json({ error: "Medicine not found." }, { status: 404 });
         }
 
-        await prisma.medicine.delete({ where: { id: params.id } });
+        await prisma.medicine.delete({ where: { id } });
 
         return NextResponse.json({ message: "Medicine deleted successfully." });
     } catch (error: any) {
