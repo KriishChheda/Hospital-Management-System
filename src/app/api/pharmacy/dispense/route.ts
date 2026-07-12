@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         // Atomic transaction: deduct stock + update prescription + log + billing
         const result = await prisma.$transaction([
             // 1. Deduct stock for each medicine
-            ...prescription.items.map((item) =>
+            ...prescription.items.map((item: any) =>
                 prisma.medicine.update({
                     where: { id: item.medicineId },
                     data: {
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
             ),
 
             // 2. Mark each item as fully dispensed
-            ...prescription.items.map((item) =>
+            ...prescription.items.map((item: any) =>
                 prisma.prescriptionItem.update({
                     where: { id: item.id },
                     data: { dispensed: item.quantity },
