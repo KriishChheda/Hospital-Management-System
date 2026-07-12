@@ -27,7 +27,7 @@ export async function POST(request: Request) {
                 items: {
                     include: { medicine: true },
                 },
-                patient: { select: { name: true } },
+                visit: { include: { patient: { select: { name: true } } } },
             },
         });
 
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
                     pharmacistId,
                     pharmacistName,
                     action: "DISPENSED",
-                    details: `Dispensed prescription for patient: ${prescription.patient.name}. ${prescription.items.length} medicine(s). Total: ₹${totalAmount.toFixed(2)}`,
+                    details: `Dispensed prescription for patient: ${prescription.visit.patient.name}. ${prescription.items.length} medicine(s). Total: ₹${totalAmount.toFixed(2)}`,
                     prescriptionId,
                 },
             }),

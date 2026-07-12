@@ -9,8 +9,12 @@ export async function GET(
         const prescription = await prisma.prescription.findUnique({
             where: { id: params.id },
             include: {
-                patient: {
-                    select: { name: true, phone: true, age: true, bloodGroup: true },
+                visit: {
+                    include: {
+                        patient: {
+                            select: { name: true, phone: true, age: true, bloodGroup: true, patientCode: true },
+                        },
+                    },
                 },
                 items: {
                     include: {
@@ -25,7 +29,11 @@ export async function GET(
             return NextResponse.json({ error: "Prescription not found." }, { status: 404 });
         }
 
-        return NextResponse.json(prescription);
+        // Flatten patient for backward compat
+        return NextResponse.json({
+            ...prescription,
+            patient: prescription.visit.patient,
+        });
     } catch (error) {
         console.error("Get Prescription Error:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 
+// Generate a human-readable patient code: HMS-0001, HMS-0002, etc.
+async function generatePatientCode(): Promise<string> {
+    const lastPatient = await prisma.patient.findFirst({
+        orderBy: { patientCode: "desc" },
+        select: { patientCode: true },
+    });
+
+    let nextNum = 1;
+    if (lastPatient?.patientCode) {
+        const match = lastPatient.patientCode.match(/HMS-(\d+)/);
+        if (match) nextNum = parseInt(match[1]) + 1;
+    }
+
+    return `HMS-${String(nextNum).padStart(4, "0")}`;
+}
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -18,11 +34,80 @@ export async function POST(request: Request) {
             aadhaarNumber, aadhaarDocUrl,
             // Medical
             allergies, existingConditions, currentMedications, pastSurgeries, disabilityInfo,
-            // Critical Level
+            // Critical Level (per-visit)
             critical,
             // Consent
             detailsAccurate, privacyAccepted,
+            // Returning patient flag
+            existingPatientId,
         } = body;
+
+        // ── RETURNING PATIENT: create a new visit for an existing patient ──
+        if (existingPatientId) {
+            const existingPatient = await prisma.patient.findUnique({
+                where: { id: existingPatientId },
+            });
+
+            if (!existingPatient) {
+                return NextResponse.json(
+                    { error: "Patient not found with the provided ID." },
+                    { status: 404 }
+                );
+            }
+
+            // Check if patient already has an active ongoing visit
+            const activeVisit = await prisma.visit.findFirst({
+                where: {
+                    patientId: existingPatientId,
+                    paymentStatus: false,
+                },
+            });
+
+            if (activeVisit) {
+                return NextResponse.json(
+                    { error: "This patient already has an ongoing visit. Please clear their pending bill before registering a new visit." },
+                    { status: 400 }
+                );
+            }
+
+            // Optionally update patient details if they changed (e.g., new phone)
+            const updatedPatient = await prisma.patient.update({
+                where: { id: existingPatientId },
+                data: {
+                    ...(phone && phone !== existingPatient.phone ? { phone } : {}),
+                    ...(alternatePhone !== undefined ? { alternatePhone: alternatePhone || null } : {}),
+                    ...(email !== undefined ? { email: email || null } : {}),
+                    ...(addressLine1 !== undefined ? { addressLine1: addressLine1 || null } : {}),
+                    ...(addressLine2 !== undefined ? { addressLine2: addressLine2 || null } : {}),
+                    ...(city !== undefined ? { city: city || null } : {}),
+                    ...(state !== undefined ? { state: state || null } : {}),
+                    ...(pincode !== undefined ? { pincode: pincode || null } : {}),
+                    ...(emergencyContactName !== undefined ? { emergencyContactName: emergencyContactName || null } : {}),
+                    ...(emergencyContactRelationship !== undefined ? { emergencyContactRelationship: emergencyContactRelationship || null } : {}),
+                    ...(emergencyContactPhone !== undefined ? { emergencyContactPhone: emergencyContactPhone || null } : {}),
+                    // Update medical history if provided
+                    ...(allergies !== undefined ? { allergies: allergies || null } : {}),
+                    ...(existingConditions !== undefined ? { existingConditions: existingConditions || [] } : {}),
+                    ...(currentMedications !== undefined ? { currentMedications: currentMedications || null } : {}),
+                },
+            });
+
+            // Create a new visit
+            const visit = await prisma.visit.create({
+                data: {
+                    patientId: existingPatientId,
+                    critical: critical || "low",
+                },
+            });
+
+            return NextResponse.json({
+                ...updatedPatient,
+                visit,
+                isReturning: true,
+            }, { status: 201 });
+        }
+
+        // ── NEW PATIENT REGISTRATION ──
 
         // 1. Server-side validation for required fields
         if (!name || !gender || !phone || !dateOfBirth) {
@@ -56,50 +141,63 @@ export async function POST(request: Request) {
             );
         }
 
-        // 4. Create the patient in the database
-        const newPatient = await prisma.patient.create({
-            data: {
-                name,
-                age: parseInt(age) || 0,
-                gender,
-                dateOfBirth,
-                bloodGroup: bloodGroup || null,
-                maritalStatus: maritalStatus || null,
-                nationality: nationality || "Indian",
+        // 4. Generate a human-readable patient code
+        const patientCode = await generatePatientCode();
 
-                phone,
-                alternatePhone: alternatePhone || null,
-                email: email || null,
+        // 5. Create the patient + first visit in a transaction
+        const result = await prisma.$transaction(async (tx) => {
+            const newPatient = await tx.patient.create({
+                data: {
+                    patientCode,
+                    name,
+                    age: parseInt(age) || 0,
+                    gender,
+                    dateOfBirth,
+                    bloodGroup: bloodGroup || null,
+                    maritalStatus: maritalStatus || null,
+                    nationality: nationality || "Indian",
 
-                addressLine1: addressLine1 || null,
-                addressLine2: addressLine2 || null,
-                city: city || null,
-                state: state || null,
-                pincode: pincode || null,
-                country: country || "India",
+                    phone,
+                    alternatePhone: alternatePhone || null,
+                    email: email || null,
 
-                emergencyContactName: emergencyContactName || null,
-                emergencyContactRelationship: emergencyContactRelationship || null,
-                emergencyContactPhone: emergencyContactPhone || null,
+                    addressLine1: addressLine1 || null,
+                    addressLine2: addressLine2 || null,
+                    city: city || null,
+                    state: state || null,
+                    pincode: pincode || null,
+                    country: country || "India",
 
-                aadhaarNumber: aadhaarNumber || null,
-                aadhaarDocUrl: aadhaarDocUrl || null,
+                    emergencyContactName: emergencyContactName || null,
+                    emergencyContactRelationship: emergencyContactRelationship || null,
+                    emergencyContactPhone: emergencyContactPhone || null,
 
-                allergies: allergies || null,
-                existingConditions: existingConditions || [],
-                currentMedications: currentMedications || null,
-                pastSurgeries: pastSurgeries || null,
-                disabilityInfo: disabilityInfo || null,
+                    aadhaarNumber: aadhaarNumber || null,
+                    aadhaarDocUrl: aadhaarDocUrl || null,
 
-                critical: critical || "low",
+                    allergies: allergies || null,
+                    existingConditions: existingConditions || [],
+                    currentMedications: currentMedications || null,
+                    pastSurgeries: pastSurgeries || null,
+                    disabilityInfo: disabilityInfo || null,
 
-                detailsAccurate: Boolean(detailsAccurate),
-                privacyAccepted: Boolean(privacyAccepted),
-            },
+                    detailsAccurate: Boolean(detailsAccurate),
+                    privacyAccepted: Boolean(privacyAccepted),
+                },
+            });
+
+            const visit = await tx.visit.create({
+                data: {
+                    patientId: newPatient.id,
+                    critical: critical || "low",
+                },
+            });
+
+            return { ...newPatient, visit };
         });
 
-        // 5. Return the created patient
-        return NextResponse.json(newPatient, { status: 201 });
+        // 6. Return the created patient with visit
+        return NextResponse.json(result, { status: 201 });
 
     } catch (error: any) {
         console.error("Registration Error:", error);

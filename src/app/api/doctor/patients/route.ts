@@ -3,30 +3,34 @@ import prisma from "@/lib/db";
 
 export async function GET() {
     try {
-        const patients = await prisma.patient.findMany({
+        // Fetch all visits with their patient data
+        const visits = await prisma.visit.findMany({
             orderBy: { createdAt: "desc" },
-            select: {
-                id: true,
-                name: true,
-                age: true,
-                gender: true,
-                phone: true,
-                critical: true,
-                bloodGroup: true,
-                createdAt: true,
-                existingConditions: true,
-                paymentStatus: true,
+            include: {
+                patient: {
+                    select: {
+                        id: true,
+                        patientCode: true,
+                        name: true,
+                        age: true,
+                        gender: true,
+                        phone: true,
+                        bloodGroup: true,
+                        existingConditions: true,
+                    },
+                },
             },
         });
 
-        // Map critical level → alertType for the dashboard UI
-        const mapped = patients.map((p) => {
+        // Map visit + patient → flat object for the dashboard UI
+        const mapped = visits.map((v) => {
+            const p = v.patient;
             const alertType: "danger" | "warning" | "normal" =
-                p.critical === "high" ? "danger" :
-                p.critical === "medium" ? "warning" : "normal";
+                v.critical === "high" ? "danger" :
+                v.critical === "medium" ? "warning" : "normal";
 
-            // Compute how long ago the patient registered
-            const diffMs = Date.now() - new Date(p.createdAt).getTime();
+            // Compute how long ago the visit was created
+            const diffMs = Date.now() - new Date(v.createdAt).getTime();
             const diffMin = Math.floor(diffMs / 60000);
             let waiting: string;
             if (diffMin < 1) waiting = "Just now";
@@ -36,23 +40,25 @@ export async function GET() {
 
             // Vitals status text based on critical level
             const vitalsStatus =
-                p.critical === "high" ? "Critical – Immediate attention" :
-                p.critical === "medium" ? "Needs monitoring" : "Vitals stable";
+                v.critical === "high" ? "Critical – Immediate attention" :
+                v.critical === "medium" ? "Needs monitoring" : "Vitals stable";
 
             return {
-                id: p.id,
+                id: v.id,             // This is the VISIT id (used to open EMR)
+                patientId: p.id,      // The permanent patient id
+                patientCode: p.patientCode,
                 name: p.name,
                 age: p.age,
                 gender: p.gender,
                 phone: p.phone.replace(/(\d{5})(\d{5})/, "$1 $2"),
                 bloodGroup: p.bloodGroup,
-                critical: p.critical,
+                critical: v.critical,
                 vitalsStatus,
                 alertType,
                 waiting,
                 existingConditions: p.existingConditions,
-                createdAt: p.createdAt,
-                paymentStatus: p.paymentStatus,
+                createdAt: v.createdAt,
+                paymentStatus: v.paymentStatus,
             };
         });
 

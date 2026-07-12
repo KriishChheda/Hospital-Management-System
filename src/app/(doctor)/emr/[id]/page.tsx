@@ -17,17 +17,22 @@ const TrashIcon = () => (<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="
 const CheckIcon = () => (<svg className="w-4 h-4 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>);
 
 interface PatientData {
+    visitId: string;
+    patientId: string;
+    patientCode: string;
+    critical: string;
     name: string; age: number; gender: string; bloodGroup: string | null;
-    phone: string; critical: string;
+    phone: string;
     addressLine1: string | null; addressLine2: string | null; city: string | null; state: string | null; pincode: string | null;
     allergies: string | null; existingConditions: string[]; currentMedications: string | null;
     pastSurgeries: string | null; disabilityInfo: string | null;
     maritalStatus: string | null; email: string | null;
+    pastVisits: { visitId: string; createdAt: string; critical: string }[];
 }
 
 export default function PatientEMRPage({ params }: { params: Promise<RouteParams> }) {
     const resolvedParams = use(params);
-    const patientId = resolvedParams.id;
+    const visitId = resolvedParams.id;
 
     const [patientData, setPatientData] = useState<PatientData | null>(null);
     const [fetchLoading, setFetchLoading] = useState(true);
@@ -36,7 +41,7 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
     useEffect(() => {
         async function loadPatient() {
             try {
-                const res = await fetch(`/api/doctor/patients/${patientId}`);
+                const res = await fetch(`/api/doctor/patients/${visitId}`);
                 if (!res.ok) {
                     setFetchError(res.status === 404 ? "Patient not found" : "Failed to load patient");
                     return;
@@ -50,11 +55,12 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
             }
         }
         loadPatient();
-    }, [patientId]);
+    }, [visitId]);
 
     const [chiefComplaint, setChiefComplaint] = useState("");
     const [clinicalNotes, setClinicalNotes] = useState("");
     const [diagnosis, setDiagnosis] = useState("");
+    const [consultationFee, setConsultationFee] = useState<number | "">(500);
 
     const [medicines, setMedicines] = useState<{ name: string; dose: string; freq: string; dur: string }[]>([]);
     const [currentMed, setCurrentMed] = useState({ name: "", dose: "", freq: "", dur: "" });
@@ -131,9 +137,36 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
         if (editingLabIdx === idx) { setEditingLabIdx(null); setCurrentLab(""); }
     };
 
-    const dispatchOrders = () => {
-        setDispatched(true);
-        setTimeout(() => setDispatched(false), 2000);
+    const dispatchOrders = async () => {
+        try {
+            const payload = {
+                visitId,
+                doctorId: "DOC-CURRENT", // Normally from session
+                doctorName: "Dr. Smith", // Normally from session
+                chiefComplaint,
+                clinicalNotes,
+                diagnosis,
+                aiSuggestions: getAISuggestions(),
+                consultationFee,
+                medicines,
+                labTests: labs.map(l => ({ name: l })),
+            };
+
+            const res = await fetch("/api/doctor/dispatch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+                setDispatched(true);
+                setTimeout(() => setDispatched(false), 2000);
+            } else {
+                alert("Failed to dispatch orders.");
+            }
+        } catch (error) {
+            alert("An error occurred while dispatching.");
+        }
     };
 
     if (fetchLoading) {
@@ -160,6 +193,7 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
 
     const address = [patientData.addressLine1, patientData.addressLine2, patientData.city, patientData.state, patientData.pincode].filter(Boolean).join(", ") || "Not provided";
     const criticalBadge = patientData.critical === "high" ? "bg-red-100 text-red-700" : patientData.critical === "medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700";
+    const totalVisits = (patientData.pastVisits?.length || 0) + 1;
 
     return (
         <div className="space-y-8 print-wrapper">
@@ -222,8 +256,14 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                     )}
                     <div className="pt-1">
                         <span className="text-[10px] font-bold text-grey block uppercase tracking-wide">Patient ID</span>
-                        <p className="text-xs text-navy font-bold font-mono">{patientId}</p>
+                        <p className="text-xs text-navy font-bold font-mono">{patientData.patientCode}</p>
                     </div>
+                    {totalVisits > 1 && (
+                        <div className="pt-1">
+                            <span className="text-[10px] font-bold text-grey block uppercase tracking-wide">Visit History</span>
+                            <p className="text-xs text-navy font-bold">Visit #{totalVisits} ({patientData.pastVisits.length} prior)</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -247,6 +287,10 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                             <div>
                                 <label className="text-xs font-bold text-grey block mb-1">Clinical Notes &amp; Observations</label>
                                 <textarea rows={4} className="w-full bg-light-grey text-navy font-semibold text-sm p-3 rounded-xl border border-soft-blue/60 focus:outline-none" placeholder="Write physical observation trends, patient updates..." value={clinicalNotes} onChange={(e) => setClinicalNotes(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-grey block mb-1">Consultation Fee (₹)</label>
+                                <input type="number" className="w-full md:w-1/3 bg-light-grey text-navy font-black text-lg p-3 rounded-xl border border-soft-blue/60 focus:outline-none" placeholder="e.g. 500" value={consultationFee} onChange={(e) => setConsultationFee(e.target.value ? parseInt(e.target.value) : "")} />
                             </div>
                         </div>
                     </div>

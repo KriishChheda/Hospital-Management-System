@@ -6,6 +6,7 @@ import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/rendere
 // ── Types ──
 export interface PatientPDFData {
   id: string;
+  patientCode?: string;
   name: string;
   age: number;
   gender: string;
@@ -196,7 +197,7 @@ export default function PatientRegistrationPDF({ patient }: { patient: PatientPD
           </View>
           <View style={styles.headerRight}>
             <Text style={styles.headerLabel}>PATIENT ID</Text>
-            <Text style={styles.headerValue}>{patient.id}</Text>
+            <Text style={styles.headerValue}>{patient.patientCode || patient.id}</Text>
             <Text style={{ ...styles.headerLabel, marginTop: 6 }}>REGISTERED ON</Text>
             <Text style={{ ...styles.headerValue, fontSize: 9 }}>
               {patient.createdAt ? formatDate(patient.createdAt) : new Date().toLocaleDateString("en-IN")}

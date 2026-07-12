@@ -8,12 +8,13 @@ export async function PATCH(
     try {
         const { id } = await params;
         
-        const updatedPatient = await prisma.patient.update({
+        // id is now a VISIT id — mark that visit's payment as collected
+        const updatedVisit = await prisma.visit.update({
             where: { id },
             data: { paymentStatus: true },
         });
 
-        return NextResponse.json(updatedPatient, { status: 200 });
+        return NextResponse.json(updatedVisit, { status: 200 });
     } catch (error) {
         console.error("Payment processing error:", error);
         return NextResponse.json(

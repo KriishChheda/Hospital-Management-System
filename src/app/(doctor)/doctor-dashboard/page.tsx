@@ -4,7 +4,9 @@ import Link from "next/link";
 
 // ── Types ──
 interface TriagePatient {
-    id: string;
+    id: string;           // Visit ID
+    patientId: string;    // Permanent patient ID
+    patientCode: string;  // Human-readable: HMS-0001
     name: string;
     age: number;
     gender: string;
@@ -287,7 +289,7 @@ export default function DoctorDashboard() {
                                             <div className="flex items-center">
                                                 <UrgencyBar type={p.alertType} />
                                                 <div>
-                                                    <p className="text-sm font-semibold text-gray-950 dark:text-gray-100">{p.name}</p>
+                                                    <p className="text-sm font-semibold text-gray-950 dark:text-gray-100">{p.name} <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 ml-1">{p.patientCode}</span></p>
                                                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 font-mono">
                                                         {p.gender} · {p.age} yrs{p.bloodGroup ? ` · ${p.bloodGroup}` : ""}
                                                     </p>

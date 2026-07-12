@@ -10,8 +10,12 @@ export async function GET(request: Request) {
             where: status ? { status: status as any } : undefined,
             orderBy: { createdAt: "desc" },
             include: {
-                patient: {
-                    select: { name: true, phone: true },
+                visit: {
+                    include: {
+                        patient: {
+                            select: { name: true, phone: true, patientCode: true },
+                        },
+                    },
                 },
                 items: {
                     include: {
@@ -23,7 +27,13 @@ export async function GET(request: Request) {
             },
         });
 
-        return NextResponse.json(prescriptions);
+        // Flatten patient data for backward compatibility with pharmacy UI
+        const mapped = prescriptions.map((rx) => ({
+            ...rx,
+            patient: rx.visit.patient,
+        }));
+
+        return NextResponse.json(mapped);
     } catch (error) {
         console.error("Get Prescriptions Error:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -33,12 +43,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { patientId, doctorName, visitId, notes, items } = body;
+        const { visitId, doctorName, notes, items } = body;
 
         // Validation
-        if (!patientId) {
+        if (!visitId) {
             return NextResponse.json(
-                { error: "Patient ID is required." },
+                { error: "Visit ID is required." },
                 { status: 400 }
             );
         }
@@ -65,17 +75,19 @@ export async function POST(request: Request) {
             }
         }
 
-        // Verify patient exists
-        const patient = await prisma.patient.findUnique({ where: { id: patientId } });
-        if (!patient) {
-            return NextResponse.json({ error: "Patient not found." }, { status: 404 });
+        // Verify visit exists
+        const visit = await prisma.visit.findUnique({
+            where: { id: visitId },
+            include: { patient: true },
+        });
+        if (!visit) {
+            return NextResponse.json({ error: "Visit not found." }, { status: 404 });
         }
 
         const prescription = await prisma.prescription.create({
             data: {
-                patientId,
+                visitId,
                 doctorName: doctorName || null,
-                visitId: visitId || null,
                 notes: notes || null,
                 items: {
                     create: items.map((item: any) => ({
@@ -89,12 +101,19 @@ export async function POST(request: Request) {
                 },
             },
             include: {
-                patient: { select: { name: true, phone: true } },
+                visit: {
+                    include: {
+                        patient: { select: { name: true, phone: true, patientCode: true } },
+                    },
+                },
                 items: { include: { medicine: true } },
             },
         });
 
-        return NextResponse.json(prescription, { status: 201 });
+        return NextResponse.json({
+            ...prescription,
+            patient: prescription.visit.patient,
+        }, { status: 201 });
     } catch (error: any) {
         console.error("Create Prescription Error:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

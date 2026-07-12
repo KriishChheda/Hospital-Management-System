@@ -92,6 +92,39 @@ export default function NewPatientPage() {
   const [submittedPatient, setSubmittedPatient] = useState<PatientPDFData | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("");
 
+  // ── Returning patient lookup ──
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupResults, setLookupResults] = useState<any[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
+
+  const searchPatient = async () => {
+    if (lookupQuery.length < 3) return;
+    setLookupLoading(true);
+    try {
+      const res = await fetch(`/api/patients/lookup?q=${encodeURIComponent(lookupQuery)}`);
+      if (res.ok) setLookupResults(await res.json());
+    } catch { /* ignore */ }
+    finally { setLookupLoading(false); }
+  };
+
+  const selectReturningPatient = (patient: any) => {
+    setSelectedPatient(patient);
+    setIsReturning(true);
+    // Pre-fill form with existing patient data
+    setForm((f) => ({ ...f, name: patient.name, phone: patient.phone, gender: patient.gender || f.gender }));
+    setLookupResults([]);
+    setLookupQuery("");
+  };
+
+  const clearReturning = () => {
+    setSelectedPatient(null);
+    setIsReturning(false);
+    setForm(INITIAL_FORM);
+    setStep(0);
+  };
+
   // ── Aadhaar OCR handler ──
   const handleAadhaarUpload = async (file: File | null) => {
     set("aadhaarFile", file);
@@ -182,7 +215,7 @@ export default function NewPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateStep()) return;
+    if (!isReturning && !validateStep()) return;
     setLoading(true);
 
     try {
@@ -195,8 +228,12 @@ export default function NewPatientPage() {
         conditions = conditions.filter((c) => c !== "Other");
       }
 
-      const payload = { ...form, existingConditions: conditions, otherCondition: undefined, aadhaarFile: undefined, aadhaarDocUrl: null };
-      // TODO: handle aadhaar file upload separately if needed
+      const payload: any = { ...form, existingConditions: conditions, otherCondition: undefined, aadhaarFile: undefined, aadhaarDocUrl: null };
+
+      // If returning patient, send their ID so the API creates a new visit
+      if (isReturning && selectedPatient) {
+        payload.existingPatientId = selectedPatient.id;
+      }
 
       const response = await fetch("/api/patients", {
         method: "POST",
@@ -223,11 +260,76 @@ export default function NewPatientPage() {
         {/* Header */}
         <div className="bg-navy px-8 py-5">
           <h3 className="text-white text-xl font-semibold">Registration Desk</h3>
-          <p className="text-cyan text-xs uppercase tracking-wider mt-1">New Patient Intake</p>
+          <p className="text-cyan text-xs uppercase tracking-wider mt-1">{isReturning ? "Returning Patient — New Visit" : "New Patient Intake"}</p>
         </div>
 
-        {/* Step Indicator */}
-        {!submittedPatient && (
+        {/* Returning Patient Lookup */}
+        {!submittedPatient && !isReturning && (
+          <div className="px-8 pt-6 pb-2 border-b border-soft-blue">
+            <p className="text-xs font-bold text-grey uppercase tracking-wider mb-2">Returning Patient? Search by Patient ID, Phone, or Name</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. HMS-0001 or 9876543210"
+                className="flex-1 p-3 bg-light-grey border border-soft-blue rounded-xl outline-none focus:ring-2 focus:ring-cyan text-sm"
+                value={lookupQuery}
+                onChange={(e) => setLookupQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), searchPatient())}
+              />
+              <button type="button" onClick={searchPatient} disabled={lookupLoading || lookupQuery.length < 3} className="bg-navy text-white px-6 py-3 rounded-xl text-xs font-bold disabled:opacity-50 transition-all active:scale-95">
+                {lookupLoading ? "Searching..." : "Search"}
+              </button>
+            </div>
+            {lookupResults.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {lookupResults.map((p: any) => (
+                  <button key={p.id} type="button" onClick={() => selectReturningPatient(p)} className="w-full flex items-center justify-between p-3 bg-light-grey border border-soft-blue rounded-xl hover:border-cyan transition-all text-left">
+                    <div>
+                      <p className="text-sm font-bold text-navy">{p.name} <span className="text-xs font-mono text-grey ml-1">{p.patientCode}</span></p>
+                      <p className="text-xs text-grey">{p.phone} · {p.gender} · {p.age} yrs{p.visits?.length ? ` · ${p.visits.length} past visit(s)` : ""}</p>
+                    </div>
+                    <span className="text-xs font-bold text-cyan">Select →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Returning patient banner */}
+        {!submittedPatient && isReturning && selectedPatient && (
+          <div className="px-8 pt-4 pb-3 bg-cyan/5 border-b border-cyan/20 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-navy">Returning: {selectedPatient.name} <span className="font-mono text-xs text-grey">{selectedPatient.patientCode}</span></p>
+              <p className="text-xs text-grey">A new visit will be created for this existing patient.</p>
+            </div>
+            <button type="button" onClick={clearReturning} className="text-xs font-bold text-status-red hover:underline">Cancel</button>
+          </div>
+        )}
+        {/* Returning patient — quick visit creation */}
+        {!submittedPatient && isReturning && selectedPatient && (
+          <form onSubmit={handleSubmit} className="p-8 space-y-6 animate-in fade-in">
+            <h4 className="text-navy font-bold text-base border-b border-soft-blue pb-2">Create New Visit</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Field label="Critical Level" field="critical" required errors={errors}>
+                <div className="relative">
+                  <select className={inputCls("critical", errors)} value={form.critical} onChange={(e) => set("critical", e.target.value)}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                  <div className={`absolute right-4.5 top-1/2 -translate-y-1 w-2.5 h-2.5 rounded-full pointer-events-none ${form.critical === "high" ? "bg-red-500" : form.critical === "medium" ? "bg-yellow-400" : "bg-green-500"}`} />
+                </div>
+              </Field>
+            </div>
+            <button type="submit" disabled={loading} className="bg-cyan text-white px-12 py-3 rounded-xl font-bold shadow-lg shadow-cyan/20 hover:bg-navy transition-all active:scale-95 disabled:opacity-50">
+              {loading ? "Creating Visit..." : "Create New Visit"}
+            </button>
+          </form>
+        )}
+
+        {/* Step Indicator (new patients only) */}
+        {!submittedPatient && !isReturning && (
           <div className="px-8 pt-6 pb-2">
             <div className="flex items-center justify-between gap-2">
               {STEPS.map((s, i) => (
@@ -258,9 +360,9 @@ export default function NewPatientPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-navy">Registration Successful!</h2>
+            <h2 className="text-2xl font-bold text-navy">{(submittedPatient as any).isReturning ? "New Visit Created!" : "Registration Successful!"}</h2>
             <p className="text-grey max-w-md mx-auto">
-              Patient <span className="font-semibold text-dark">{submittedPatient.name}</span> has been successfully registered with ID: <span className="font-semibold text-dark">{submittedPatient.id}</span>
+              Patient <span className="font-semibold text-dark">{submittedPatient.name}</span> — Patient ID: <span className="font-semibold text-dark">{(submittedPatient as any).patientCode || submittedPatient.id}</span>
             </p>
 
             <div className="pt-8 flex flex-col sm:flex-row justify-center gap-4">
@@ -289,6 +391,8 @@ export default function NewPatientPage() {
                   setForm(INITIAL_FORM);
                   setStep(0);
                   setSubmittedPatient(null);
+                  setSelectedPatient(null);
+                  setIsReturning(false);
                 }}
                 className="bg-light-grey text-navy px-8 py-3 rounded-xl font-bold border border-soft-blue hover:bg-soft-blue transition-all active:scale-95"
               >

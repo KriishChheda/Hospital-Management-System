@@ -7,8 +7,9 @@ datasource db {
 }
 
 model Patient {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  patientCode String   @unique          // Human-readable ID: "HMS-0001"
+  createdAt   DateTime @default(now())
 
   // ── Personal Information ──
   name          String
@@ -41,27 +42,40 @@ model Patient {
   aadhaarNumber String? @unique
   aadhaarDocUrl String?
 
-  // ── Medical History ──
+  // ── Medical History (accumulates over time) ──
   allergies          String?
   existingConditions String[] // e.g. ["Diabetes", "Hypertension"]
   currentMedications String?
   pastSurgeries      String?
   disabilityInfo     String?
 
-  // ── Critical Level ──
-  critical           String  @default("low") // "high", "medium", "low"
-
   // ── Consent ──
   detailsAccurate    Boolean @default(false)
   privacyAccepted    Boolean @default(false)
 
-  // ── Billing ──
-  paymentStatus      Boolean @default(false)
-  registrationFee    Float   @default(500.0)
+  // ── Visits (one patient → many visits) ──
+  visits         Visit[]
+}
 
+// ── Visit: one record per clinic trip ──
+model Visit {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+
+  // ── Per-visit billing ──
+  paymentStatus  Boolean  @default(false)
+  registrationFee Float   @default(500.0)
+
+  // ── Per-visit criticality ──
+  critical       String   @default("low") // "high", "medium", "low"
+
+  // ── Relations scoped to this visit ──
   prescriptions  Prescription[]
-  emrVisits     EMRVisit[]      // Added
-  labOrders     LabOrder[]      // Added
+  emrVisits      EMRVisit[]
+  labOrders      LabOrder[]
 }
 
 enum Role {
@@ -123,13 +137,12 @@ model Prescription {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  patientId   String
-  patient     Patient            @relation(fields: [patientId], references: [id])
+  visitId     String
+  visit       Visit              @relation(fields: [visitId], references: [id])
 
   doctorId    String?            // links to User with role DOCTOR
   doctorName  String?            // denormalized for display speed
 
-  visitId     String?            // for EMR visit grouping
   notes       String?
   status      PrescriptionStatus @default(PENDING)
 
@@ -183,14 +196,14 @@ model PharmacyBilling {
   paymentMethod  String?  // "Cash", "Card", "Insurance"
 }
 
-// ── NEW: EMR Medical Visit Tracking ──
+// ── EMR Medical Visit Tracking ──
 model EMRVisit {
   id            String   @id @default(cuid())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
-  patientId     String
-  patient       Patient  @relation(fields: [patientId], references: [id])
+  visitId       String
+  visit         Visit    @relation(fields: [visitId], references: [id])
   
   doctorId      String
   doctorName    String
@@ -213,7 +226,7 @@ model EMRVisit {
   customFooter   String?  @default("Please bring this prescription note on your next visit.")
 }
 
-// ── NEW: Laboratory Orders Dashboard Integration ──
+// ── Laboratory Orders Dashboard Integration ──
 enum LabOrderStatus {
   PENDING
   COMPLETED
@@ -225,8 +238,8 @@ model LabOrder {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   
-  patientId     String
-  patient       Patient        @relation(fields: [patientId], references: [id])
+  visitId       String
+  visit         Visit          @relation(fields: [visitId], references: [id])
   
   doctorId      String
   doctorName    String
