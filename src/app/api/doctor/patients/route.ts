@@ -23,7 +23,7 @@ export async function GET() {
         });
 
         // Map visit + patient → flat object for the dashboard UI
-        const mapped = visits.map((v) => {
+        const mapped = visits.map((v: any) => {
             const p = v.patient;
             const alertType: "danger" | "warning" | "normal" =
                 v.critical === "high" ? "danger" :
