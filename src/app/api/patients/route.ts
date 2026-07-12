@@ -145,7 +145,7 @@ export async function POST(request: Request) {
         const patientCode = await generatePatientCode();
 
         // 5. Create the patient + first visit in a transaction
-        const result = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx: any) => {
             const newPatient = await tx.patient.create({
                 data: {
                     patientCode,
