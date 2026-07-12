@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         }
 
         // Calculate billing total
-        const totalAmount = prescription.items.reduce((sum, item) => {
+        const totalAmount = prescription.items.reduce((sum: number, item: any) => {
             const needed = item.quantity - item.dispensed;
             return sum + needed * item.medicine.pricePerUnit;
         }, 0);
