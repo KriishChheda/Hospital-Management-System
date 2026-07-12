@@ -94,7 +94,7 @@ export async function GET(
             labOrders: visit.labOrders,
 
             // Past visits history (all visits for this patient)
-            pastVisits: patient.visits.filter(v => v.id !== visit.id).map(v => ({
+            pastVisits: patient.visits.filter((v: any) => v.id !== visit.id).map((v: any) => ({
                 visitId: v.id,
                 createdAt: v.createdAt,
                 critical: v.critical,
