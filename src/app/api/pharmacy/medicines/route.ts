@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
         // Filter low stock in JS (Prisma can't compare two columns of same model)
         const filtered = lowStock
-            ? medicines.filter((m) => m.currentStock <= m.minStockLevel)
+            ? medicines.filter((m: any) => m.currentStock <= m.minStockLevel)
             : medicines;
 
         return NextResponse.json(filtered);
