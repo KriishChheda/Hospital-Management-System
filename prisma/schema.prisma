@@ -72,10 +72,16 @@ model Visit {
   // ── Per-visit criticality ──
   critical       String   @default("low") // "high", "medium", "low"
 
+  // ── Doctor assignment (set at registration) ──
+  doctorProfileId String?               // which doctor this visit belongs to
+  doctorProfile   DoctorProfile? @relation(fields: [doctorProfileId], references: [id])
+  scheduledTime   DateTime?             // null = walk-in; DateTime = pre-booked slot
+
   // ── Relations scoped to this visit ──
   prescriptions  Prescription[]
   emrVisits      EMRVisit[]
   labOrders      LabOrder[]
+  queueEntry     QueueEntry?            // back-relation (1:1, optional)
 }
 
 enum Role {
@@ -269,4 +275,39 @@ model DoctorProfile {
 
   // Weekly time slots stored as JSON: { "monday": ["09:00-12:00","14:00-17:00"], ... }
   weeklySlots     Json     @default("{}")
+
+  // ── Back-relations ──
+  visits       Visit[]        // all visits assigned to this doctor
+  queueEntries QueueEntry[]   // all active queue entries for this doctor
+}
+
+// ── Patient Queue ──
+enum QueueStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  DEFERRED
+  CANCELLED
+}
+
+model QueueEntry {
+  id               String      @id @default(cuid())
+  createdAt        DateTime    @default(now())
+
+  visitId          String      @unique
+  visit            Visit       @relation(fields: [visitId], references: [id])
+
+  doctorProfileId  String
+  doctorProfile    DoctorProfile @relation(fields: [doctorProfileId], references: [id])
+
+  checkInTime      DateTime    @default(now())  // when patient physically checked in
+  status           QueueStatus @default(WAITING)
+
+  // Receptionist manual control
+  manualAdjustment Int         @default(0)  // positive = boost, negative = push back, 999 = urgent
+  receptionistNote String?                  // optional reason for override
+
+  // Computed & stored for display (recalculated on every GET)
+  queueScore       Float       @default(0)
+  position         Int?                     // 1-indexed rank in the doctor's queue
 }

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
-        // Fetch all visits with their patient data
+        const { searchParams } = new URL(request.url);
+        const doctorProfileId = searchParams.get("doctorProfileId");
+
+        // Fetch visits — scoped to doctor if provided, otherwise all
         const visits = await prisma.visit.findMany({
+            where: doctorProfileId ? { doctorProfileId } : {},
             orderBy: { createdAt: "desc" },
             include: {
                 patient: {

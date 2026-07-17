@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Tesseract from "tesseract.js";
 import { pdf } from "@react-pdf/renderer";
 import PatientRegistrationPDF from "@/components/PatientRegistrationPDF";
@@ -35,6 +35,10 @@ interface PatientForm {
   pastSurgeries: string;
   disabilityInfo: string;
   critical: "high" | "medium" | "low";
+  // Doctor assignment
+  doctorProfileId: string;
+  visitType: "walkin" | "appointment";
+  scheduledTime: string;  // ISO string or "" if walkin
   detailsAccurate: boolean;
   privacyAccepted: boolean;
 }
@@ -47,6 +51,7 @@ const INITIAL_FORM: PatientForm = {
   aadhaarNumber: "", aadhaarFile: null,
   allergies: "", existingConditions: [], otherCondition: "", currentMedications: "", pastSurgeries: "", disabilityInfo: "",
   critical: "low",
+  doctorProfileId: "", visitType: "walkin", scheduledTime: "",
   detailsAccurate: false, privacyAccepted: false,
 };
 
@@ -92,12 +97,27 @@ export default function NewPatientPage() {
   const [submittedPatient, setSubmittedPatient] = useState<PatientPDFData | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("");
 
+  // ── Doctor list for assignment ──
+  const [doctors, setDoctors] = useState<{ id: string; fullName: string; specialization: string; availableNow: boolean; weeklySlots: Record<string, string[]> }[]>([]);
+  useEffect(() => {
+    fetch("/api/doctors/available")
+      .then((r) => r.json())
+      .then((d) => setDoctors(d.doctors || []))
+      .catch(() => {});
+  }, []);
+
+  // Derive today's slots for the selected doctor
+  const TODAY_NAME = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][new Date().getDay()];
+  const selectedDoctor = doctors.find((d) => d.id === form.doctorProfileId);
+  const todaySlots: string[] = selectedDoctor?.weeklySlots?.[TODAY_NAME] || [];
+
   // ── Returning patient lookup ──
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupResults, setLookupResults] = useState<any[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
   const [isReturning, setIsReturning] = useState(false);
+  const [showUpdatePanel, setShowUpdatePanel] = useState(false);
 
   const searchPatient = async () => {
     if (lookupQuery.length < 3) return;
@@ -112,8 +132,41 @@ export default function NewPatientPage() {
   const selectReturningPatient = (patient: any) => {
     setSelectedPatient(patient);
     setIsReturning(true);
-    // Pre-fill form with existing patient data
-    setForm((f) => ({ ...f, name: patient.name, phone: patient.phone, gender: patient.gender || f.gender }));
+    setShowUpdatePanel(false);
+    // Pre-fill the entire form with the patient's existing data
+    setForm((f) => ({
+      ...f,
+      name: patient.name || "",
+      age: patient.age ? String(patient.age) : "",
+      gender: patient.gender || "",
+      dateOfBirth: patient.dateOfBirth ? patient.dateOfBirth.split("T")[0] : "",
+      bloodGroup: patient.bloodGroup || "",
+      maritalStatus: patient.maritalStatus || "",
+      nationality: patient.nationality || "Indian",
+      phone: patient.phone || "",
+      alternatePhone: patient.alternatePhone || "",
+      email: patient.email || "",
+      addressLine1: patient.addressLine1 || "",
+      addressLine2: patient.addressLine2 || "",
+      city: patient.city || "",
+      state: patient.state || "",
+      pincode: patient.pincode || "",
+      country: patient.country || "India",
+      emergencyContactName: patient.emergencyContactName || "",
+      emergencyContactRelationship: patient.emergencyContactRelationship || "",
+      emergencyContactPhone: patient.emergencyContactPhone || "",
+      aadhaarNumber: patient.aadhaarNumber || "",
+      allergies: patient.allergies || "",
+      existingConditions: patient.existingConditions || [],
+      currentMedications: patient.currentMedications || "",
+      pastSurgeries: patient.pastSurgeries || "",
+      disabilityInfo: patient.disabilityInfo || "",
+      // Reset visit-specific fields
+      critical: "low",
+      doctorProfileId: "",
+      visitType: "walkin",
+      scheduledTime: "",
+    }));
     setLookupResults([]);
     setLookupQuery("");
   };
@@ -228,7 +281,16 @@ export default function NewPatientPage() {
         conditions = conditions.filter((c) => c !== "Other");
       }
 
-      const payload: any = { ...form, existingConditions: conditions, otherCondition: undefined, aadhaarFile: undefined, aadhaarDocUrl: null };
+      const payload: any = {
+        ...form,
+        existingConditions: conditions,
+        otherCondition: undefined,
+        aadhaarFile: undefined,
+        aadhaarDocUrl: null,
+        // Doctor queue fields
+        doctorProfileId: form.doctorProfileId || null,
+        scheduledTime: (form.visitType === "appointment" && form.scheduledTime) ? form.scheduledTime : null,
+      };
 
       // If returning patient, send their ID so the API creates a new visit
       if (isReturning && selectedPatient) {
@@ -321,7 +383,248 @@ export default function NewPatientPage() {
                   <div className={`absolute right-4.5 top-1/2 -translate-y-1 w-2.5 h-2.5 rounded-full pointer-events-none ${form.critical === "high" ? "bg-red-500" : form.critical === "medium" ? "bg-yellow-400" : "bg-green-500"}`} />
                 </div>
               </Field>
+
+              {/* Doctor Assignment */}
+              <Field label="Assign Doctor" field="doctorProfileId" errors={errors}>
+                <select className={inputCls("doctorProfileId", errors)} value={form.doctorProfileId} onChange={(e) => { set("doctorProfileId", e.target.value); set("scheduledTime", ""); }}>
+                  <option value="">— No doctor assigned —</option>
+                  {doctors.map((d) => (
+                    <option key={d.id} value={d.id}>{d.fullName} · {d.specialization}{d.availableNow ? " 🟢" : ""}</option>
+                  ))}
+                </select>
+              </Field>
+
+              {form.doctorProfileId && (
+                <Field label="Visit Type" field="visitType" errors={errors}>
+                  <div className="flex gap-3">
+                    {(["walkin", "appointment"] as const).map((t) => (
+                      <button key={t} type="button"
+                        onClick={() => { set("visitType", t); set("scheduledTime", ""); }}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                          form.visitType === t ? "bg-cyan text-white border-cyan" : "bg-light-grey text-grey border-soft-blue hover:border-cyan"
+                        }`}>
+                        {t === "walkin" ? "🚶 Walk-in" : "📅 Pre-booked"}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
+
+              {form.doctorProfileId && form.visitType === "appointment" && (
+                <Field label="Select Time Slot" field="scheduledTime" errors={errors}>
+                  {todaySlots.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {todaySlots.map((slot) => {
+                        const [h, m] = slot.split(":").map(Number);
+                        const slotDate = new Date(); slotDate.setHours(h, m, 0, 0);
+                        const iso = slotDate.toISOString();
+                        return (
+                          <button key={slot} type="button"
+                            onClick={() => set("scheduledTime", iso)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                              form.scheduledTime === iso ? "bg-cyan text-white border-cyan" : "bg-soft-blue text-navy border-soft-blue hover:border-cyan"
+                            }`}>{slot}</button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-grey italic">No slots configured for today.</p>
+                  )}
+                </Field>
+              )}
             </div>
+
+            {/* ── Collapsible Update Patient Details ── */}
+            <div className="border border-soft-blue rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowUpdatePanel((v) => !v)}
+                className="w-full flex items-center justify-between px-5 py-3.5 bg-light-grey/60 hover:bg-light-grey transition-colors text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">✏️</span>
+                  <div>
+                    <p className="text-sm font-bold text-navy">Update Patient Details</p>
+                    <p className="text-xs text-grey">Pre-filled with existing data · Only change what&apos;s different</p>
+                  </div>
+                </div>
+                <span className={`text-grey text-sm font-bold transition-transform ${showUpdatePanel ? "rotate-180" : ""}`}>▾</span>
+              </button>
+
+              {showUpdatePanel && (
+                <div className="p-5 space-y-6 border-t border-soft-blue">
+                  <p className="text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2">
+                    ⚠ Fields below are pre-filled with the patient&apos;s current data. Edit only what has changed.
+                  </p>
+
+                  {/* ── Personal Information ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Personal Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                      <Field label="Full Name" field="name" required errors={errors}>
+                        <input type="text" placeholder="e.g. Rahul Sharma" className={inputCls("name", errors)} value={form.name} onChange={(e) => set("name", e.target.value)} />
+                      </Field>
+                      <Field label="Date of Birth" field="dateOfBirth" required errors={errors}>
+                        <input type="date" className={inputCls("dateOfBirth", errors)} value={form.dateOfBirth} max={new Date().toISOString().split("T")[0]} onChange={(e) => handleDOBChange(e.target.value)} />
+                      </Field>
+                      <Field label="Age" field="age" errors={errors}>
+                        <input type="number" placeholder="Auto-calculated" className={inputCls("age", errors)} value={form.age} onChange={(e) => set("age", e.target.value)} />
+                      </Field>
+                      <Field label="Gender" field="gender" required errors={errors}>
+                        <select className={inputCls("gender", errors)} value={form.gender} onChange={(e) => set("gender", e.target.value)}>
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </Field>
+                      <Field label="Blood Group" field="bloodGroup" errors={errors}>
+                        <select className={inputCls("bloodGroup", errors)} value={form.bloodGroup} onChange={(e) => set("bloodGroup", e.target.value)}>
+                          <option value="">Select Blood Group</option>
+                          {BLOOD_GROUPS.map((bg) => <option key={bg} value={bg}>{bg}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Marital Status" field="maritalStatus" errors={errors}>
+                        <select className={inputCls("maritalStatus", errors)} value={form.maritalStatus} onChange={(e) => set("maritalStatus", e.target.value)}>
+                          <option value="">Select Status</option>
+                          {MARITAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Nationality" field="nationality" errors={errors}>
+                        <input type="text" className={inputCls("nationality", errors)} value={form.nationality} onChange={(e) => set("nationality", e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+
+                  {/* ── Contact Information ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Contact Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                      <Field label="Mobile Number" field="phone" required errors={errors}>
+                        <input type="tel" placeholder="10-digit mobile number" className={inputCls("phone", errors)} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+                      </Field>
+                      <Field label="Alternate Mobile Number" field="alternatePhone" errors={errors}>
+                        <input type="tel" placeholder="10-digit number" className={inputCls("alternatePhone", errors)} value={form.alternatePhone} onChange={(e) => set("alternatePhone", e.target.value)} />
+                      </Field>
+                      <Field label="Email Address" field="email" errors={errors}>
+                        <input type="email" placeholder="patient@email.com" className={inputCls("email", errors)} value={form.email} onChange={(e) => set("email", e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+
+                  {/* ── Address ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Address</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                      <Field label="Address Line 1" field="addressLine1" errors={errors}>
+                        <input type="text" placeholder="House/Flat no., Street" className={inputCls("addressLine1", errors)} value={form.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} />
+                      </Field>
+                      <Field label="Address Line 2" field="addressLine2" errors={errors}>
+                        <input type="text" placeholder="Locality, Landmark" className={inputCls("addressLine2", errors)} value={form.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} />
+                      </Field>
+                      <Field label="City" field="city" errors={errors}>
+                        <input type="text" placeholder="City" className={inputCls("city", errors)} value={form.city} onChange={(e) => set("city", e.target.value)} />
+                      </Field>
+                      <Field label="State" field="state" errors={errors}>
+                        <select className={inputCls("state", errors)} value={form.state} onChange={(e) => set("state", e.target.value)}>
+                          <option value="">Select State</option>
+                          {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Pincode" field="pincode" errors={errors}>
+                        <input type="text" placeholder="6-digit pincode" className={inputCls("pincode", errors)} value={form.pincode} onChange={(e) => set("pincode", e.target.value)} />
+                      </Field>
+                      <Field label="Country" field="country" errors={errors}>
+                        <input type="text" className={inputCls("country", errors)} value={form.country} onChange={(e) => set("country", e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+
+                  {/* ── Emergency Contact ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Emergency Contact</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                      <Field label="Contact Name" field="emergencyContactName" errors={errors}>
+                        <input type="text" placeholder="Full name" className={inputCls("emergencyContactName", errors)} value={form.emergencyContactName} onChange={(e) => set("emergencyContactName", e.target.value)} />
+                      </Field>
+                      <Field label="Relationship" field="emergencyContactRelationship" errors={errors}>
+                        <select className={inputCls("emergencyContactRelationship", errors)} value={form.emergencyContactRelationship} onChange={(e) => set("emergencyContactRelationship", e.target.value)}>
+                          <option value="">Select</option>
+                          {["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"].map((r) => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Contact Number" field="emergencyContactPhone" errors={errors}>
+                        <input type="tel" placeholder="10-digit number" className={inputCls("emergencyContactPhone", errors)} value={form.emergencyContactPhone} onChange={(e) => set("emergencyContactPhone", e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+
+                  {/* ── Identification ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Identification</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                      <Field label="Aadhaar Number" field="aadhaarNumber" errors={errors}>
+                        <input type="text" placeholder="12-digit Aadhaar number" maxLength={12} className={inputCls("aadhaarNumber", errors)} value={form.aadhaarNumber} onChange={(e) => set("aadhaarNumber", e.target.value.replace(/\D/g, ""))} />
+                      </Field>
+                      <Field label="Upload Aadhaar (auto-reads number)" field="aadhaarFile" errors={errors}>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="w-full p-2.5 bg-light-grey border border-soft-blue rounded-xl outline-none text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-cyan/10 file:text-cyan file:font-semibold file:cursor-pointer"
+                          onChange={(e) => { handleAadhaarUpload(e.target.files?.[0] || null); e.target.value = ""; }}
+                        />
+                      </Field>
+                    </div>
+                    {(ocrScanning || ocrStatus) && (
+                      <div className={`mt-4 flex items-center gap-3 p-3 rounded-xl border text-sm ${ocrScanning ? "border-cyan/40 bg-cyan/5 text-cyan" : ocrStatus.startsWith("✓") ? "border-status-green/40 bg-status-green/5 text-status-green" : "border-status-orange/40 bg-status-orange/5 text-status-orange"}`}>
+                        {ocrScanning && (<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>)}
+                        <span className="font-medium">{ocrStatus}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Medical History ── */}
+                  <div>
+                    <h5 className="text-navy font-bold text-sm border-b border-soft-blue pb-2 mb-4">Medical History</h5>
+                    <div className="space-y-5">
+                      <Field label="Allergies" field="allergies" errors={errors}>
+                        <textarea rows={2} placeholder="List any known allergies (food, drug, environmental...)" className={inputCls("allergies", errors)} value={form.allergies} onChange={(e) => set("allergies", e.target.value)} />
+                      </Field>
+                      <div>
+                        <label className="text-sm font-bold text-dark block mb-3">Existing Conditions</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                          {CONDITIONS_LIST.map((c) => (
+                            <label key={c} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${form.existingConditions.includes(c) ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"}`}>
+                              <input type="checkbox" className="accent-cyan w-4 h-4" checked={form.existingConditions.includes(c)} onChange={() => toggleCondition(c)} />
+                              {c}
+                            </label>
+                          ))}
+                          <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all text-sm ${form.existingConditions.includes("Other") ? "border-cyan bg-cyan/5 text-navy font-semibold" : "border-soft-blue bg-light-grey text-grey hover:border-cyan/40"}`}>
+                            <input type="checkbox" className="accent-cyan w-4 h-4" checked={form.existingConditions.includes("Other")} onChange={() => { toggleCondition("Other"); if (form.existingConditions.includes("Other")) set("otherCondition", ""); }} />
+                            Other
+                          </label>
+                        </div>
+                        {form.existingConditions.includes("Other") && (
+                          <input type="text" placeholder="Please specify the condition..." className={`mt-3 ${inputCls("otherCondition", errors)}`} value={form.otherCondition} onChange={(e) => set("otherCondition", e.target.value)} />
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                        <Field label="Current Medications" field="currentMedications" errors={errors}>
+                          <textarea rows={2} placeholder="List current medications with dosage" className={inputCls("currentMedications", errors)} value={form.currentMedications} onChange={(e) => set("currentMedications", e.target.value)} />
+                        </Field>
+                        <Field label="Past Surgeries" field="pastSurgeries" errors={errors}>
+                          <textarea rows={2} placeholder="List any past surgeries with year" className={inputCls("pastSurgeries", errors)} value={form.pastSurgeries} onChange={(e) => set("pastSurgeries", e.target.value)} />
+                        </Field>
+                      </div>
+                      <Field label="Disability Information" field="disabilityInfo" errors={errors}>
+                        <textarea rows={2} placeholder="Describe any disability or special needs" className={inputCls("disabilityInfo", errors)} value={form.disabilityInfo} onChange={(e) => set("disabilityInfo", e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button type="submit" disabled={loading} className="bg-cyan text-white px-12 py-3 rounded-xl font-bold shadow-lg shadow-cyan/20 hover:bg-navy transition-all active:scale-95 disabled:opacity-50">
               {loading ? "Creating Visit..." : "Create New Visit"}
             </button>
@@ -400,7 +703,7 @@ export default function NewPatientPage() {
               </button>
             </div>
           </div>
-        ) : (
+        ) : !isReturning && (
           <form onSubmit={handleSubmit} className="p-8 pt-4">
             {/* ── STEP 0: Personal Information ── */}
             {step === 0 && (
@@ -574,18 +877,8 @@ export default function NewPatientPage() {
                       }} />
                       Other
                     </label>
-                    <Field label="Critical Level" field="critical" required errors={errors}>
-                      <div className="relative">
-                        <select className={inputCls("critical", errors)} value={form.critical} onChange={(e) => set("critical", e.target.value)}>
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                        </select>
-                        <div className={`absolute right-4.5 top-1/2 -translate-y-1 w-2.5 h-2.5 rounded-full pointer-events-none ${form.critical === "high" ? "bg-red-500" : form.critical === "medium" ? "bg-yellow-400" : "bg-green-500"
-                          }`} />
-                      </div>
-                    </Field>
                   </div>
+
                   {form.existingConditions.includes("Other") && (
                     <input
                       type="text"
@@ -609,6 +902,89 @@ export default function NewPatientPage() {
                 <Field label="Disability Information" field="disabilityInfo" errors={errors}>
                   <textarea rows={2} placeholder="Describe any disability or special needs" className={inputCls("disabilityInfo", errors)} value={form.disabilityInfo} onChange={(e) => set("disabilityInfo", e.target.value)} />
                 </Field>
+
+                {/* ── Doctor Assignment ── */}
+                <div className="border-t border-soft-blue pt-5 space-y-4">
+                  <h5 className="text-navy font-bold text-sm">🩺 Doctor Assignment & Queue</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    <Field label="Assign Doctor" field="doctorProfileId" errors={errors}>
+                      <select className={inputCls("doctorProfileId", errors)} value={form.doctorProfileId} onChange={(e) => { set("doctorProfileId", e.target.value); set("scheduledTime", ""); }}>
+                        <option value="">— No doctor assigned —</option>
+                        {doctors.map((d) => (
+                          <option key={d.id} value={d.id}>{d.fullName} · {d.specialization}{d.availableNow ? " 🟢" : ""}</option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field label="Critical Level" field="critical" required errors={errors}>
+                      <div className="relative">
+                        <select className={inputCls("critical", errors)} value={form.critical} onChange={(e) => set("critical", e.target.value)}>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                        <div className={`absolute right-4.5 top-1/2 -translate-y-1 w-2.5 h-2.5 rounded-full pointer-events-none ${form.critical === "high" ? "bg-red-500" : form.critical === "medium" ? "bg-yellow-400" : "bg-green-500"}`} />
+                      </div>
+                    </Field>
+
+                    {form.doctorProfileId && (
+                      <Field label="Visit Type" field="visitType" errors={errors}>
+                        <div className="flex gap-3">
+                          {(["walkin", "appointment"] as const).map((t) => (
+                            <button key={t} type="button"
+                              onClick={() => { set("visitType", t); set("scheduledTime", ""); }}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                                form.visitType === t ? "bg-cyan text-white border-cyan" : "bg-light-grey text-grey border-soft-blue hover:border-cyan"
+                              }`}>
+                              {t === "walkin" ? "🚶 Walk-in" : "📅 Pre-booked"}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+
+                    {form.doctorProfileId && form.visitType === "appointment" && (
+                      <Field label="Select Time Slot" field="scheduledTime" errors={errors}>
+                        {todaySlots.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {todaySlots.map((slot) => {
+                              const [h, m] = slot.split(":").map(Number);
+                              const slotDate = new Date(); slotDate.setHours(h, m, 0, 0);
+                              const iso = slotDate.toISOString();
+                              return (
+                                <button key={slot} type="button"
+                                  onClick={() => set("scheduledTime", iso)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                                    form.scheduledTime === iso ? "bg-cyan text-white border-cyan" : "bg-soft-blue text-navy border-soft-blue hover:border-cyan"
+                                  }`}>{slot}</button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-grey italic">No slots configured for today by this doctor.</p>
+                        )}
+                      </Field>
+                    )}
+                  </div>
+
+                  {form.doctorProfileId && (
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${
+                      form.visitType === "appointment" ? "border-cyan/40 bg-cyan/5 text-cyan" : "border-soft-blue bg-light-grey text-grey"
+                    }`}>
+                      <span className="text-lg">{form.visitType === "appointment" ? "📅" : "🚶"}</span>
+                      <div>
+                        <p className="font-bold">{form.visitType === "appointment" ? "Pre-booked Appointment" : "Walk-in Visit"}</p>
+                        <p className="text-xs opacity-80">
+                          {form.visitType === "appointment" && form.scheduledTime
+                            ? `Slot: ${new Date(form.scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Will receive appointment bonus in queue`
+                            : form.visitType === "appointment"
+                            ? "Select a time slot above"
+                            : "Patient will be queued as walk-in · Aging bonus applies"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

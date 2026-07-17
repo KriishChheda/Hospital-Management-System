@@ -23,6 +23,7 @@ export default function ReceptionistLayout({ children }: { children: React.React
           <nav className="flex flex-col gap-2">
             <NavLink href="/registeration" label="Patient Intake" icon="👤" active={pathname === "/registeration"} />
             <NavLink href="/appointments" label="Appointments" icon="📅" active={pathname === "/appointments"} />
+            <NavLink href="/queue" label="Patient Queue" icon="🔢" active={pathname === "/queue"} />
             <NavLink href="/billings" label="Billing Hub" icon="💳" active={pathname === "/billings"} />
           </nav>
         </div>

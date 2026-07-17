@@ -9,6 +9,8 @@ const protectedRoutes: Record<string, string[]> = {
     "/doctor-dashboard": ["DOCTOR"],
     "/nurse-dashboard": ["NURSE"],
     "/registeration": ["RECEPTIONIST"],
+    "/appointments": ["RECEPTIONIST"],
+    "/queue": ["RECEPTIONIST"],
     "/inventory": ["PHARMACIST"],
 };
 
@@ -60,6 +62,8 @@ export const config = {
         "/doctor-dashboard/:path*",
         "/nurse-dashboard/:path*",
         "/registeration/:path*",
+        "/appointments/:path*",
+        "/queue/:path*",
         "/inventory/:path*",
     ],
 };

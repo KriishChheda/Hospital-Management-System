@@ -40,6 +40,9 @@ export async function POST(request: Request) {
             detailsAccurate, privacyAccepted,
             // Returning patient flag
             existingPatientId,
+            // Doctor assignment (queue system)
+            doctorProfileId,
+            scheduledTime,
         } = body;
 
         // ── RETURNING PATIENT: create a new visit for an existing patient ──
@@ -92,13 +95,27 @@ export async function POST(request: Request) {
                 },
             });
 
-            // Create a new visit
+            // Create a new visit with doctor assignment
             const visit = await prisma.visit.create({
                 data: {
                     patientId: existingPatientId,
                     critical: critical || "low",
+                    doctorProfileId: doctorProfileId || null,
+                    scheduledTime: scheduledTime ? new Date(scheduledTime) : null,
                 },
             });
+
+            // Auto-enqueue if a doctor was assigned
+            if (doctorProfileId) {
+                await prisma.queueEntry.create({
+                    data: {
+                        visitId: visit.id,
+                        doctorProfileId,
+                        checkInTime: new Date(),
+                        status: "WAITING",
+                    },
+                });
+            }
 
             return NextResponse.json({
                 ...updatedPatient,
@@ -190,8 +207,22 @@ export async function POST(request: Request) {
                 data: {
                     patientId: newPatient.id,
                     critical: critical || "low",
+                    doctorProfileId: doctorProfileId || null,
+                    scheduledTime: scheduledTime ? new Date(scheduledTime) : null,
                 },
             });
+
+            // Auto-enqueue if a doctor was assigned
+            if (doctorProfileId) {
+                await tx.queueEntry.create({
+                    data: {
+                        visitId: visit.id,
+                        doctorProfileId,
+                        checkInTime: new Date(),
+                        status: "WAITING",
+                    },
+                });
+            }
 
             return { ...newPatient, visit };
         });
