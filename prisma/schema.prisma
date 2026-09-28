@@ -257,6 +257,47 @@ model LabOrder {
   flaggedAlert  Boolean        @default(false) // Highlights critical abnormalities
 }
 
+// ── Pre-Booking (Phone-call appointments) ──
+enum PreBookingStatus {
+  PENDING     // SMS / link sent, patient hasn't filled the chatbot yet
+  SUBMITTED   // Patient submitted chatbot form, awaiting receptionist approval
+  APPROVED    // Receptionist approved — Patient + Visit created, NOT in queue yet
+  ARRIVED     // Patient physically walked in → QueueEntry created
+  EXPIRED     // Token expired (24 h)
+  CANCELLED
+}
+
+model PreBooking {
+  id              String            @id @default(cuid())
+  createdAt       DateTime          @default(now())
+  tokenExpiresAt  DateTime          // createdAt + 24 h
+
+  phone           String            // phone number the link was sent to
+  token           String            @unique // UUID embedded in the chatbot URL
+
+  status          PreBookingStatus  @default(PENDING)
+
+  // Filled by patient via chatbot (stored as raw JSON)
+  patientData     Json?
+
+  // Doctor + slots
+  doctorProfileId String?
+  doctorProfile   DoctorProfile?    @relation(fields: [doctorProfileId], references: [id])
+  requestedSlot   DateTime?         // slot patient chose
+  approvedSlot    DateTime?         // slot receptionist confirmed (may differ)
+
+  // After receptionist approves → real records are created
+  patientId       String?           // linked after APPROVED
+  visitId         String?  @unique  // linked after APPROVED (no QueueEntry yet)
+
+  // Timestamps
+  smsSentAt             DateTime?
+  confirmationSmsSentAt DateTime?
+  arrivedAt             DateTime?   // set when receptionist clicks "Mark as Arrived"
+
+  receptionistNote String?
+}
+
 // ── Doctor Profile & Availability ──
 model DoctorProfile {
   id              String   @id @default(cuid())
@@ -279,6 +320,7 @@ model DoctorProfile {
   // ── Back-relations ──
   visits       Visit[]        // all visits assigned to this doctor
   queueEntries QueueEntry[]   // all active queue entries for this doctor
+  preBookings  PreBooking[]   // all pre-bookings for this doctor
 }
 
 // ── Patient Queue ──

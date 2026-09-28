@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 
-// This connects the Node.js driver to your Prisma cloud URL
+// This connects the Node.js driver to your local Postgres
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 

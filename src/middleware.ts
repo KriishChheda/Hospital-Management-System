@@ -17,6 +17,11 @@ const protectedRoutes: Record<string, string[]> = {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // Public routes — no auth needed (patient-facing chatbot)
+    if (pathname.startsWith("/book")) {
+        return NextResponse.next();
+    }
+
     // Check if the path matches any protected route
     const matchedRoute = Object.keys(protectedRoutes).find((route) =>
         pathname.startsWith(route)

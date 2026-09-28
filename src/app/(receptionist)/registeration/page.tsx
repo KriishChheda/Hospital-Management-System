@@ -97,6 +97,50 @@ export default function NewPatientPage() {
   const [submittedPatient, setSubmittedPatient] = useState<PatientPDFData | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("");
 
+  // ── Intake mode: null = not yet chosen, walkin = existing form, prebooked = SMS flow ──
+  const [intakeMode, setIntakeMode] = useState<"walkin" | "prebooked" | null>(null);
+
+  // ── Pre-booking SMS flow state ──
+  const [pbPhone, setPbPhone] = useState("");
+  const [pbPhoneError, setPbPhoneError] = useState("");
+  const [pbSending, setPbSending] = useState(false);
+  const [pbLink, setPbLink] = useState<string | null>(null);
+  const [pbCopied, setPbCopied] = useState(false);
+
+  const handleSendLink = async () => {
+    setPbPhoneError("");
+    if (!/^[0-9]{10}$/.test(pbPhone)) {
+      setPbPhoneError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    setPbSending(true);
+    try {
+      const res = await fetch("/api/prebook/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: pbPhone }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPbLink(data.chatbotLink);
+      } else {
+        setPbPhoneError(data.error || "Failed to generate link.");
+      }
+    } catch {
+      setPbPhoneError("Network error. Please try again.");
+    } finally {
+      setPbSending(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!pbLink) return;
+    navigator.clipboard.writeText(pbLink).then(() => {
+      setPbCopied(true);
+      setTimeout(() => setPbCopied(false), 2500);
+    });
+  };
+
   // ── Doctor list for assignment ──
   const [doctors, setDoctors] = useState<{ id: string; fullName: string; specialization: string; availableNow: boolean; weeklySlots: Record<string, string[]> }[]>([]);
   useEffect(() => {
@@ -322,10 +366,160 @@ export default function NewPatientPage() {
         {/* Header */}
         <div className="bg-navy px-8 py-5">
           <h3 className="text-white text-xl font-semibold">Registration Desk</h3>
-          <p className="text-cyan text-xs uppercase tracking-wider mt-1">{isReturning ? "Returning Patient — New Visit" : "New Patient Intake"}</p>
+          <p className="text-cyan text-xs uppercase tracking-wider mt-1">
+            {intakeMode === null ? "Select patient intake type" :
+              intakeMode === "walkin" ? (isReturning ? "Returning Patient — New Visit" : "New Patient — Walk-in") :
+              "Pre-Booked Appointment — SMS Link"}
+          </p>
         </div>
 
-        {/* Returning Patient Lookup */}
+        {/* ── STEP 0: Intake Mode Selector ── */}
+        {intakeMode === null && (
+          <div className="p-8 space-y-6 animate-in fade-in">
+            <p className="text-sm font-bold text-grey uppercase tracking-wider">How is the patient registering today?</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Walk-in card */}
+              <button
+                type="button"
+                onClick={() => setIntakeMode("walkin")}
+                className="group text-left p-6 rounded-2xl border-2 border-soft-blue hover:border-cyan bg-light-grey/30 hover:bg-cyan/5 transition-all active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan/30"
+              >
+                <div className="w-12 h-12 bg-navy rounded-xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                  🚼
+                </div>
+                <p className="font-black text-navy text-base mb-1">🚶 Walk-in</p>
+                <p className="text-sm text-grey leading-relaxed">
+                  Patient is physically present at the reception desk. Fill in their details now and add them to the queue immediately.
+                </p>
+              </button>
+
+              {/* Pre-booked card */}
+              <button
+                type="button"
+                onClick={() => setIntakeMode("prebooked")}
+                className="group text-left p-6 rounded-2xl border-2 border-soft-blue hover:border-cyan bg-light-grey/30 hover:bg-cyan/5 transition-all active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan/30"
+              >
+                <div className="w-12 h-12 bg-cyan/10 rounded-xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                  📱
+                </div>
+                <p className="font-black text-navy text-base mb-1">📅 Pre-Booked (Phone Call)</p>
+                <p className="text-sm text-grey leading-relaxed">
+                  Patient called in advance. Enter their phone number and send them a chatbot link to fill the form themselves.
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PRE-BOOKED: Phone entry + Send Link ── */}
+        {intakeMode === "prebooked" && (
+          <div className="p-8 space-y-6 animate-in fade-in">
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                type="button"
+                onClick={() => { setIntakeMode(null); setPbPhone(""); setPbLink(null); setPbPhoneError(""); }}
+                className="text-xs font-bold text-grey hover:text-navy transition-colors"
+              >
+                ← Back
+              </button>
+              <span className="text-grey text-xs">·</span>
+              <span className="text-xs font-bold text-cyan uppercase tracking-wider">Pre-Booked SMS Flow</span>
+            </div>
+
+            {!pbLink ? (
+              <div className="space-y-5 max-w-md">
+                <div>
+                  <label className="text-sm font-bold text-dark block mb-2">Patient / Guardian Mobile Number *</label>
+                  <p className="text-xs text-grey mb-3">A chatbot link will be generated and logged to the server console (dev mode). Share it with the patient to fill their details.</p>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-grey text-sm font-semibold">+91</span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        placeholder="10-digit mobile number"
+                        value={pbPhone}
+                        onChange={(e) => { setPbPhone(e.target.value.replace(/\D/g, "")); setPbPhoneError(""); }}
+                        onKeyDown={(e) => e.key === "Enter" && handleSendLink()}
+                        className={`w-full pl-12 pr-4 py-3 bg-light-grey border rounded-xl outline-none focus:ring-2 transition-all text-sm ${
+                          pbPhoneError ? "border-status-red focus:ring-status-red/20" : "border-soft-blue focus:ring-cyan"
+                        }`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendLink}
+                      disabled={pbSending || pbPhone.length < 10}
+                      className="bg-cyan text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg shadow-cyan/20 hover:bg-navy transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {pbSending ? "Generating..." : "Send Link →"}
+                    </button>
+                  </div>
+                  {pbPhoneError && <p className="text-status-red text-xs font-bold mt-1.5">{pbPhoneError}</p>}
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <p className="text-amber-700 text-xs font-semibold">
+                    ⚠️ Dev Mode: The chatbot link will be logged to the server console instead of being sent as an SMS.
+                    Check your Next.js terminal after clicking ‘Send Link’.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5 max-w-md">
+                <div className="bg-status-green/10 border border-status-green/30 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-status-green/20 rounded-xl flex items-center justify-center text-status-green text-xl">✅</div>
+                    <div>
+                      <p className="font-bold text-navy text-sm">Chatbot link generated!</p>
+                      <p className="text-xs text-grey">Share this link with the patient on +91 {pbPhone}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-soft-blue rounded-xl p-3 break-all">
+                    <p className="text-xs font-mono text-navy">{pbLink}</p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="flex-1 bg-cyan text-white py-2.5 rounded-xl text-sm font-bold hover:bg-navy transition-all active:scale-95 shadow-lg shadow-cyan/20"
+                    >
+                      {pbCopied ? "✓ Copied!" : "📋 Copy Link"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.open(pbLink!, "_blank")}
+                      className="bg-soft-blue text-navy border border-soft-blue px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-light-grey transition-all active:scale-95"
+                    >
+                      👁️ Preview
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-light-grey/50 border border-soft-blue rounded-xl px-4 py-3">
+                  <p className="text-xs text-grey leading-relaxed">
+                    💡 The patient will fill in their details via the chatbot link. Once submitted, go to <strong>Appointments → Awaiting Approval</strong> to review and confirm their slot.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => { setPbPhone(""); setPbLink(null); setPbCopied(false); }}
+                  className="text-xs font-bold text-cyan hover:underline"
+                >
+                  + Generate another link
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── WALK-IN: existing form (only shown when intakeMode === "walkin") ── */}
+        {intakeMode === "walkin" && (
+          <>
+
         {!submittedPatient && !isReturning && (
           <div className="px-8 pt-6 pb-2 border-b border-soft-blue">
             <p className="text-xs font-bold text-grey uppercase tracking-wider mb-2">Returning Patient? Search by Patient ID, Phone, or Name</p>
@@ -1055,6 +1249,9 @@ export default function NewPatientPage() {
             </div>
           </form>
         )}
+        </> /* end walk-in fragment */
+        )}
+
       </div>
     </div>
   );
