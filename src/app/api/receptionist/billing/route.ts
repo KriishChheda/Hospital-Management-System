@@ -17,6 +17,18 @@ export async function GET() {
                         name: true,
                     },
                 },
+                doctorProfile: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        specialization: true,
+                    },
+                },
+                queueEntry: {
+                    select: {
+                        status: true,
+                    },
+                },
             },
         });
 
@@ -28,6 +40,10 @@ export async function GET() {
             name: v.patient.name,
             registrationFee: v.registrationFee,
             createdAt: v.createdAt,
+            doctorId: v.doctorProfile?.id || null,
+            doctorName: v.doctorProfile?.fullName ? `Dr. ${v.doctorProfile.fullName}` : "Unassigned / General",
+            doctorSpecialization: v.doctorProfile?.specialization || "General Medicine",
+            queueStatus: v.queueEntry?.status || "WAITING",
         }));
 
         return NextResponse.json(mapped, { status: 200 });

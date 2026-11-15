@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { motion, useInView, animate, AnimatePresence } from "framer-motion";
+import { AuditEventDetailModal, FullAuditLogModal } from "@/components/AuditEventModal";
+import type { SystemAuditEvent } from "@/lib/systemAudit";
 
 /* ══════════════════════════════════════════════
    TYPES
@@ -42,7 +44,19 @@ interface ReportsApiData {
         queueOccupancy: { waiting: number; consulting: number; completedToday: number; totalToday: number; trend: string; trendUp: boolean };
         pharmacy: { dispensedToday: number; pending: number; lowStock: number; trend: string; trendUp: boolean };
     };
-    activities: ActivityEntry[];
+    activities: (ActivityEntry & Partial<SystemAuditEvent>)[];
+    allAuditEvents?: SystemAuditEvent[];
+    auditSummary?: {
+        uptime: string;
+        uptimeSeconds: number;
+        bootTime: string;
+        nodeVersion: string;
+        platform: string;
+        memory: { rssMB: string; heapMB: string };
+        dbLatencyMs: number;
+        totalEvents: number;
+        categoryCounts: Record<string, number>;
+    };
     staff: LoginEntry[];
     pendingStaffApprovalsCount: number;
     charts: {
@@ -326,27 +340,46 @@ const ACT_MAP: Record<string, { path: string; bg: string; color: string }> = {
     reg: { path: "M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z", bg: "bg-cyan/10", color: "text-cyan" },
     vital: { path: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z", bg: "bg-status-green/10", color: "text-status-green" },
     bill: { path: "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z", bg: "bg-status-orange/10", color: "text-status-orange" },
-    lab: { path: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z", bg: "bg-navy/8", color: "text-navy" },
+    lab: { path: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z", bg: "bg-indigo-50", color: "text-indigo-700" },
     pharmacy: { path: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4", bg: "bg-status-green/10", color: "text-status-green" },
+    auth: { path: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", bg: "bg-purple-50", color: "text-purple-700" },
+    system: { path: "M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z", bg: "bg-navy/10", color: "text-navy" },
+    doctor: { path: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", bg: "bg-teal-50", color: "text-teal-700" },
+    prebook: { path: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z", bg: "bg-cyan/10", color: "text-cyan" },
     def: { path: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", bg: "bg-soft-blue", color: "text-grey" },
 };
 
-function ActivityItem({ time, text, user, type = "def", index }: ActivityEntry & { index: number }) {
+function ActivityItem({
+    time,
+    text,
+    user,
+    type = "def",
+    index,
+    onClick,
+}: (ActivityEntry & Partial<SystemAuditEvent>) & { index: number; onClick?: () => void }) {
     const ic = ACT_MAP[type] || ACT_MAP.def;
     return (
-        <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
+        <motion.div
+            initial={{ opacity: 0, x: -14 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.35, delay: 0.15 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-            className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-soft-blue/40 transition-colors cursor-default">
-            <div className={`w-8 h-8 rounded-xl ${ic.bg} flex items-center justify-center shrink-0`}>
+            onClick={onClick}
+            className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-soft-blue/50 transition-all cursor-pointer group active:scale-[0.99]"
+            title="Click to view complete event audit details"
+        >
+            <div className={`w-8 h-8 rounded-xl ${ic.bg} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-xs`}>
                 <svg className={`w-4 h-4 ${ic.color} fill-none stroke-current stroke-2`} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d={ic.path} />
                 </svg>
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-navy truncate">{text}</p>
+                <p className="text-[12px] font-bold text-navy truncate group-hover:text-cyan transition-colors">{text}</p>
                 <p className="text-[11px] text-grey mt-0.5 truncate">{user}</p>
             </div>
-            <span className="text-[10px] font-medium text-grey bg-light-grey border border-soft-blue rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">{time}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-medium text-grey bg-light-grey border border-soft-blue rounded-full px-2 py-0.5 whitespace-nowrap">{time}</span>
+                <span className="text-grey/40 group-hover:text-cyan transition-colors text-xs font-bold">›</span>
+            </div>
         </motion.div>
     );
 }
@@ -421,6 +454,8 @@ export default function ReportsPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [lastSync, setLastSync] = useState<string>("");
+    const [selectedAuditEvent, setSelectedAuditEvent] = useState<SystemAuditEvent | null>(null);
+    const [showFullAuditModal, setShowFullAuditModal] = useState<boolean>(false);
 
     // Fetch reports data from real-time database endpoint
     const fetchReports = useCallback(async (isManual = false) => {
@@ -586,24 +621,44 @@ export default function ReportsPage() {
                         <div className="flex items-center justify-between px-5 py-4 border-b border-soft-blue">
                             <div>
                                 <h3 className="font-black text-navy text-[14px] tracking-tight">Recent Activity</h3>
-                                <p className="text-[11px] text-grey mt-0.5">Live events stream</p>
+                                <p className="text-[11px] text-grey mt-0.5">Click event to inspect full details</p>
                             </div>
-                            <span className="text-[9px] font-black text-cyan uppercase tracking-widest bg-soft-blue border border-cyan/20 rounded-full px-2.5 py-1">
-                                Real-Time
-                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowFullAuditModal(true)}
+                                    className="text-[10px] font-black text-cyan hover:text-navy uppercase tracking-wider bg-soft-blue/60 hover:bg-soft-blue border border-cyan/20 rounded-full px-2.5 py-1 transition-all active:scale-95"
+                                >
+                                    Audit Log →
+                                </button>
+                                <span className="text-[9px] font-black text-cyan uppercase tracking-widest bg-soft-blue border border-cyan/20 rounded-full px-2.5 py-1">
+                                    Real-Time
+                                </span>
+                            </div>
                         </div>
                         <div className="flex-1 px-3 py-2 divide-y divide-soft-blue/30">
                             {loading && !reportData ? (
                                 <p className="text-xs text-grey text-center py-8 font-semibold">Streaming activity feed...</p>
                             ) : (reportData?.activities ?? []).length === 0 ? (
-                                <p className="text-xs text-grey text-center py-8 font-semibold">No recent clinical events logged yet.</p>
+                                <p className="text-xs text-grey text-center py-8 font-semibold">No recent events logged yet.</p>
                             ) : (
-                                (reportData?.activities ?? []).map((a, i) => <ActivityItem key={a.id || i} {...a} index={i} />)
+                                (reportData?.activities ?? []).map((a, i) => (
+                                    <ActivityItem
+                                        key={a.id || i}
+                                        {...a}
+                                        index={i}
+                                        onClick={() => setSelectedAuditEvent(a as SystemAuditEvent)}
+                                    />
+                                ))
                             )}
                         </div>
                         <div className="px-5 py-3 border-t border-soft-blue flex items-center justify-between text-[11px] text-grey font-medium">
                             <span>Auto-refreshing every 15s</span>
-                            <span className="text-navy font-bold">{reportData?.activities.length ?? 0} events</span>
+                            <button
+                                onClick={() => setShowFullAuditModal(true)}
+                                className="text-cyan font-bold hover:underline"
+                            >
+                                View full audit ({reportData?.allAuditEvents?.length ?? reportData?.activities.length ?? 0}) →
+                            </button>
                         </div>
                     </div>
                 </FadeUp>
@@ -667,19 +722,32 @@ export default function ReportsPage() {
                             <UptimeBar pct={99.9} delay={0.7} />
                             <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between">
                                 <div>
-                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Last Database Ping</p>
-                                    <p className="text-[13px] font-bold text-white mt-0.5">{lastSync || "Connected"}</p>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">System Uptime</p>
+                                    <p className="text-[13px] font-bold text-white mt-0.5">{reportData?.auditSummary?.uptime || "99.9% Online"}</p>
                                 </div>
-                                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-cyan fill-none stroke-cyan stroke-2" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                    </svg>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">DB Latency</p>
+                                    <p className="text-[13px] font-mono font-bold text-cyan mt-0.5">{reportData?.auditSummary?.dbLatencyMs ? `${reportData.auditSummary.dbLatencyMs}ms` : "< 5ms"}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </FadeUp>
             </div>
+
+            {/* ── System Audit Detail Modal ── */}
+            <AuditEventDetailModal
+                event={selectedAuditEvent}
+                onClose={() => setSelectedAuditEvent(null)}
+            />
+
+            {/* ── Comprehensive Full Audit Log Modal ── */}
+            <FullAuditLogModal
+                isOpen={showFullAuditModal}
+                onClose={() => setShowFullAuditModal(false)}
+                events={reportData?.allAuditEvents || (reportData?.activities as unknown as SystemAuditEvent[]) || []}
+                onSelectEvent={(ev) => setSelectedAuditEvent(ev)}
+            />
         </div>
     );
 }

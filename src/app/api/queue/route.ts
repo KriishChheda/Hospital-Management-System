@@ -58,15 +58,31 @@ export async function GET(request: Request) {
       return { ...entry, queueScore: score };
     });
 
-    // Sort: WAITING and IN_PROGRESS by score desc, DEFERRED at the end
-    const active = scored
-      .filter((e) => e.status === "WAITING" || e.status === "IN_PROGRESS")
-      .sort((a, b) => b.queueScore - a.queueScore);
+    // Separate active entries: Consulting patients (IN_PROGRESS) must always be at top
+    const consulting = scored.filter((e) => e.status === "IN_PROGRESS");
+    const waiting = scored
+      .filter((e) => e.status === "WAITING")
+      .sort((a, b) => {
+        if (Math.abs(b.queueScore - a.queueScore) > 0.001) {
+          return b.queueScore - a.queueScore;
+        }
+        if (a.position !== null && b.position !== null && a.position !== b.position) {
+          return a.position - b.position;
+        }
+        const timeDiff = new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return a.id.localeCompare(b.id);
+      });
 
     const deferred = scored.filter((e) => e.status === "DEFERRED");
 
-    // Assign positions (1-indexed, only for active entries)
-    const positioned = active.map((e, i) => ({ ...e, position: i + 1 }));
+    // Assign positions (1-indexed: consulting patients first, then waiting queue)
+    const positionedConsulting = consulting.map((e, idx) => ({ ...e, position: idx + 1 }));
+    const positionedWaiting = waiting.map((e, idx) => ({
+      ...e,
+      position: consulting.length + idx + 1,
+    }));
+    const positioned = [...positionedConsulting, ...positionedWaiting];
 
     // Batch-update scores and positions in DB (fire-and-forget, non-blocking)
     const updateOps = positioned.map((e) =>
@@ -166,29 +182,110 @@ export async function PATCH(request: Request) {
 
     const existing = await prisma.queueEntry.findUnique({
       where: { id: queueEntryId },
+      include: { visit: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Queue entry not found" }, { status: 404 });
     }
 
+    // Special deterministic swap handling for BUMP_UP and BUMP_DOWN
+    if (action === "BUMP_UP" || action === "BUMP_DOWN") {
+      if (existing.status !== "WAITING") {
+        return NextResponse.json(
+          { error: "Only waiting patients can be reordered in the queue" },
+          { status: 400 }
+        );
+      }
+
+      const now = new Date();
+
+      // Fetch all WAITING entries for this specific doctor
+      const waitingEntries = await prisma.queueEntry.findMany({
+        where: {
+          doctorProfileId: existing.doctorProfileId,
+          status: "WAITING",
+        },
+        include: { visit: true },
+      });
+
+      // Compute naturalScore and currentScore for each entry
+      const scoredWaiting = waitingEntries
+        .map((entry) => ({
+          entry,
+          naturalScore: computeQueueScore({
+            critical: entry.visit.critical as "low" | "medium" | "high",
+            checkInTime: entry.checkInTime,
+            scheduledTime: entry.visit.scheduledTime,
+            manualAdjustment: 0,
+            now,
+          }),
+          currentScore: computeQueueScore({
+            critical: entry.visit.critical as "low" | "medium" | "high",
+            checkInTime: entry.checkInTime,
+            scheduledTime: entry.visit.scheduledTime,
+            manualAdjustment: entry.manualAdjustment,
+            now,
+          }),
+        }))
+        .sort((a, b) => {
+          if (Math.abs(b.currentScore - a.currentScore) > 0.001) {
+            return b.currentScore - a.currentScore;
+          }
+          if (a.entry.position !== null && b.entry.position !== null && a.entry.position !== b.entry.position) {
+            return a.entry.position - b.entry.position;
+          }
+          const timeDiff = new Date(a.entry.checkInTime).getTime() - new Date(b.entry.checkInTime).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return a.entry.id.localeCompare(b.entry.id);
+        });
+
+      const currentIndex = scoredWaiting.findIndex((item) => item.entry.id === queueEntryId);
+      if (currentIndex === -1) {
+        return NextResponse.json({ error: "Entry not found in waiting queue" }, { status: 404 });
+      }
+
+      const targetIndex = action === "BUMP_UP" ? currentIndex - 1 : currentIndex + 1;
+
+      // Bound checks: already at top or bottom
+      if (targetIndex < 0 || targetIndex >= scoredWaiting.length) {
+        return NextResponse.json({
+          success: true,
+          message: action === "BUMP_UP" ? "Already at top of waiting queue" : "Already at end of waiting queue",
+        });
+      }
+
+      // Swap the elements in the reordered list
+      const reordered = [...scoredWaiting];
+      const temp = reordered[currentIndex];
+      reordered[currentIndex] = reordered[targetIndex];
+      reordered[targetIndex] = temp;
+
+      // Base top score guarantees strictly decreasing scores across all slots
+      const baseTopScore = Math.max(reordered[0].currentScore, 100);
+      const updates = reordered.map((item, idx) => {
+        const targetScore = baseTopScore - idx * 5;
+        const newAdjustment = Math.round(targetScore - item.naturalScore);
+        return prisma.queueEntry.update({
+          where: { id: item.entry.id },
+          data: {
+            manualAdjustment: newAdjustment,
+            receptionistNote:
+              item.entry.id === queueEntryId
+                ? (note ?? item.entry.receptionistNote)
+                : item.entry.receptionistNote,
+          },
+        });
+      });
+
+      await prisma.$transaction(updates);
+
+      return NextResponse.json({ success: true, message: "Queue position swapped successfully" });
+    }
+
     let updateData: Record<string, any> = {};
 
     switch (action) {
-      case "BUMP_UP":
-        updateData = {
-          manualAdjustment: existing.manualAdjustment + 30,
-          receptionistNote: note ?? existing.receptionistNote,
-        };
-        break;
-
-      case "BUMP_DOWN":
-        updateData = {
-          manualAdjustment: existing.manualAdjustment - 30,
-          receptionistNote: note ?? existing.receptionistNote,
-        };
-        break;
-
       case "URGENT":
         // 999 — guaranteed top of queue regardless of other scores
         updateData = {

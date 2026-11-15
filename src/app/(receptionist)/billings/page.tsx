@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Script from "next/script";
 import QRCodeSVG from "@/components/QRCodeSVG";
 
@@ -12,6 +12,10 @@ interface PendingBill {
     name: string;
     registrationFee: number;
     createdAt: string;
+    doctorId?: string | null;
+    doctorName?: string;
+    doctorSpecialization?: string;
+    queueStatus?: string;
 }
 
 interface RazorpaySuccessResponse {
@@ -99,6 +103,7 @@ export default function BillingPage() {
     const [cashierNote, setCashierNote] = useState<string>("");
     const [upiCopied, setUpiCopied] = useState(false);
     const [successToast, setSuccessToast] = useState<string | null>(null);
+    const [doctorFilter, setDoctorFilter] = useState<string>("ALL");
 
     const hospitalUpiId = "bizlumehospital@upi";
 
@@ -115,6 +120,26 @@ export default function BillingPage() {
             setLoading(false);
         }
     }, []);
+
+    // Extract unique doctors for filtering
+    const uniqueDoctors = useMemo(() => {
+        const map = new Map<string, { id: string; name: string; count: number }>();
+        pendingBills.forEach((b) => {
+            const docId = b.doctorId || "unassigned";
+            const docName = b.doctorName || "General / Unassigned";
+            const current = map.get(docId) || { id: docId, name: docName, count: 0 };
+            current.count += 1;
+            map.set(docId, current);
+        });
+        return Array.from(map.values());
+    }, [pendingBills]);
+
+    // Filter bills by selected doctor
+    const filteredBills = useMemo(() => {
+        if (doctorFilter === "ALL") return pendingBills;
+        if (doctorFilter === "unassigned") return pendingBills.filter((b) => !b.doctorId);
+        return pendingBills.filter((b) => b.doctorId === doctorFilter);
+    }, [pendingBills, doctorFilter]);
 
     useEffect(() => {
         fetchBills();
@@ -323,7 +348,7 @@ export default function BillingPage() {
                 <div>
                     <h2 className="text-2xl font-black text-navy tracking-tight">Billing & Invoices</h2>
                     <p className="text-grey text-sm font-medium mt-0.5">
-                        Collect patient registration fees via Cash, UPI QR, or Online Gateway.
+                        Collect patient registration fees via Cash, UPI QR, or Online Gateway across all doctors.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -339,6 +364,40 @@ export default function BillingPage() {
                 </div>
             </div>
 
+            {/* Doctor Filter Bar */}
+            {uniqueDoctors.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    <span className="text-xs font-bold text-grey uppercase tracking-wider shrink-0 mr-1">
+                        Filter by Doctor:
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setDoctorFilter("ALL")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                            doctorFilter === "ALL"
+                                ? "bg-navy text-white shadow-sm"
+                                : "bg-white text-navy border border-soft-blue hover:bg-light-grey"
+                        }`}
+                    >
+                        All Doctors ({pendingBills.length})
+                    </button>
+                    {uniqueDoctors.map((doc) => (
+                        <button
+                            key={doc.id}
+                            type="button"
+                            onClick={() => setDoctorFilter(doc.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                                doctorFilter === doc.id
+                                    ? "bg-navy text-white shadow-sm"
+                                    : "bg-white text-navy border border-soft-blue hover:bg-light-grey"
+                            }`}
+                        >
+                            {doc.name} ({doc.count})
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Pending Invoices Table */}
             <div className="bg-white rounded-3xl border border-soft-blue overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
@@ -347,7 +406,8 @@ export default function BillingPage() {
                             <tr>
                                 <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Invoice / Patient ID</th>
                                 <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Patient Name</th>
-                                <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Item Description</th>
+                                <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Consulting Doctor</th>
+                                <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Consultation Status</th>
                                 <th className="p-4 text-xs font-black text-grey uppercase tracking-widest">Amount</th>
                                 <th className="p-4 text-xs font-black text-grey uppercase tracking-widest text-right">Action</th>
                             </tr>
@@ -355,22 +415,44 @@ export default function BillingPage() {
                         <tbody className="divide-y divide-soft-blue">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-sm font-semibold text-grey animate-pulse">
+                                    <td colSpan={6} className="p-8 text-center text-sm font-semibold text-grey animate-pulse">
                                         Loading active patients...
                                     </td>
                                 </tr>
-                            ) : pendingBills.length === 0 ? (
+                            ) : filteredBills.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="p-12 text-center text-sm font-semibold text-grey">
-                                        No pending bills found. All active patients are cleared.
+                                    <td colSpan={6} className="p-12 text-center text-sm font-semibold text-grey">
+                                        {pendingBills.length === 0
+                                            ? "No pending bills found. All active patients are cleared."
+                                            : "No pending bills match the selected doctor filter."}
                                     </td>
                                 </tr>
                             ) : (
-                                pendingBills.map((bill) => (
+                                filteredBills.map((bill) => (
                                     <tr key={bill.id} className="hover:bg-soft-blue/10 transition-colors">
                                         <td className="p-4 font-bold text-navy font-mono text-xs">{bill.patientCode}</td>
                                         <td className="p-4 text-sm font-bold text-navy">{bill.name}</td>
-                                        <td className="p-4 text-xs text-grey">Patient Registration & Consultation Fee</td>
+                                        <td className="p-4 text-xs">
+                                            <div className="font-bold text-navy">{bill.doctorName || "General Consultation"}</div>
+                                            {bill.doctorSpecialization && (
+                                                <div className="text-[11px] text-grey">{bill.doctorSpecialization}</div>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-xs">
+                                            {bill.queueStatus === "COMPLETED" ? (
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    Consultation Done
+                                                </span>
+                                            ) : bill.queueStatus === "IN_PROGRESS" ? (
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                                    With Doctor
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                    In Queue
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="p-4 font-black text-navy text-base">₹{bill.registrationFee}</td>
                                         <td className="p-4 text-right">
                                             <button
@@ -405,6 +487,9 @@ export default function BillingPage() {
                                 <h3 className="text-lg font-black tracking-tight">Collect Payment</h3>
                                 <p className="text-xs text-cyan mt-0.5 font-medium">
                                     {selectedBill.name} · <span className="font-mono">{selectedBill.patientCode}</span>
+                                    {selectedBill.doctorName && (
+                                        <span className="text-white/80"> · {selectedBill.doctorName}</span>
+                                    )}
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">

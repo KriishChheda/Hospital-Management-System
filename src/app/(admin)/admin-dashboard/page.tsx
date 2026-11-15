@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AuditEventDetailModal, FullAuditLogModal, CATEGORY_BADGES, SEVERITY_BADGES } from "@/components/AuditEventModal";
+import type { SystemAuditEvent, SystemAuditReport } from "@/lib/systemAudit";
 
 interface PendingUser {
     id: string;
@@ -57,6 +59,14 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [approvingId, setApprovingId] = useState<string | null>(null);
 
+    // System audit state
+    const [auditEvents, setAuditEvents] = useState<SystemAuditEvent[]>([]);
+    const [allAuditEvents, setAllAuditEvents] = useState<SystemAuditEvent[]>([]);
+    const [auditSummary, setAuditSummary] = useState<SystemAuditReport["summary"] | null>(null);
+    const [auditLoading, setAuditLoading] = useState(true);
+    const [selectedAuditEvent, setSelectedAuditEvent] = useState<SystemAuditEvent | null>(null);
+    const [showFullAuditModal, setShowFullAuditModal] = useState(false);
+
     const fetchPendingUsers = async () => {
         try {
             const res = await fetch("/api/admin/users");
@@ -69,7 +79,28 @@ export default function AdminDashboard() {
         }
     };
 
-    useEffect(() => { fetchPendingUsers(); }, []);
+    const fetchAudit = async () => {
+        try {
+            const res = await fetch("/api/admin/audit?limit=30");
+            if (res.ok) {
+                const data = await res.json();
+                setAuditEvents(data.events?.slice(0, 6) || []);
+                setAllAuditEvents(data.events || []);
+                setAuditSummary(data.summary || null);
+            }
+        } catch {
+            console.error("Failed to load audit events");
+        } finally {
+            setAuditLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingUsers();
+        fetchAudit();
+        const timer = setInterval(fetchAudit, 15000);
+        return () => clearInterval(timer);
+    }, []);
 
     const approveUser = async (id: string) => {
         setApprovingId(id);
@@ -261,6 +292,128 @@ export default function AdminDashboard() {
                     </table>
                 </div>
             </motion.div>
+
+            {/* ── System Audit & Recent Activity Card ── */}
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white rounded-3xl border border-soft-blue overflow-hidden shadow-sm"
+            >
+                <div className="p-6 border-b border-soft-blue flex items-center justify-between gap-4 flex-wrap bg-light-grey/40">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-black text-navy tracking-tight">System Audit & Recent Activity</h2>
+                            <span className="text-[10px] font-black text-cyan uppercase tracking-widest bg-cyan/10 border border-cyan/20 rounded-full px-2.5 py-0.5">
+                                Real-Time
+                            </span>
+                        </div>
+                        <p className="text-xs text-grey mt-0.5">
+                            End-to-end event stream from system boot to live clinical and financial operations. Click any event to inspect full audit details.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {auditSummary && (
+                            <div className="hidden sm:flex items-center gap-2 bg-white border border-soft-blue rounded-xl px-3 py-1.5 text-xs font-mono">
+                                <span className="w-2 h-2 rounded-full bg-status-green animate-pulse" />
+                                <span className="text-grey font-semibold">Uptime:</span>
+                                <span className="font-bold text-navy">{auditSummary.uptime}</span>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => setShowFullAuditModal(true)}
+                            className="bg-navy hover:bg-cyan hover:text-navy text-white text-xs font-bold px-4 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+                        >
+                            Open Full Audit Trail ({allAuditEvents.length}) →
+                        </button>
+                    </div>
+                </div>
+
+                <div className="divide-y divide-soft-blue/40 p-2">
+                    {auditLoading && auditEvents.length === 0 ? (
+                        <div className="py-12 text-center text-xs font-semibold text-grey">
+                            Streaming system audit events...
+                        </div>
+                    ) : auditEvents.length === 0 ? (
+                        <div className="py-12 text-center text-xs font-semibold text-grey">
+                            No recent audit events captured.
+                        </div>
+                    ) : (
+                        auditEvents.map((ev) => {
+                            const catBadge = CATEGORY_BADGES[ev.category] || CATEGORY_BADGES.SYSTEM;
+                            const sevBadge = SEVERITY_BADGES[ev.severity] || SEVERITY_BADGES.info;
+                            return (
+                                <div
+                                    key={ev.id}
+                                    onClick={() => setSelectedAuditEvent(ev)}
+                                    className="p-3.5 rounded-2xl hover:bg-soft-blue/40 transition-all cursor-pointer flex items-center justify-between gap-4 group"
+                                    title="Click to view full event audit parameters"
+                                >
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${catBadge.bg} ${catBadge.text} ${catBadge.border}`}>
+                                                {ev.category}
+                                            </span>
+                                            <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full ${sevBadge.bg} ${sevBadge.text}`}>
+                                                <span className={`w-1 h-1 rounded-full ${sevBadge.dot}`} />
+                                                {ev.severity.toUpperCase()}
+                                            </span>
+                                            <span className="text-[10px] text-grey font-mono">
+                                                {ev.time}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-bold text-navy group-hover:text-cyan transition-colors truncate">
+                                            {ev.title}
+                                        </p>
+                                        <p className="text-xs text-grey truncate">
+                                            {ev.summary}
+                                        </p>
+                                    </div>
+
+                                    <div className="text-right shrink-0 flex items-center gap-3">
+                                        <div className="hidden sm:block text-right">
+                                            <span className="text-[10px] font-bold text-grey block">
+                                                {ev.actor.name}
+                                            </span>
+                                            <span className="text-[9px] text-cyan font-bold">
+                                                {ev.actor.role}
+                                            </span>
+                                        </div>
+                                        <span className="w-8 h-8 rounded-xl bg-light-grey group-hover:bg-cyan group-hover:text-white text-navy flex items-center justify-center transition-all shadow-sm">
+                                            →
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+
+                <div className="px-6 py-3.5 bg-light-grey border-t border-soft-blue flex items-center justify-between text-xs text-grey font-medium">
+                    <span>Auto-refreshing live audit every 15s</span>
+                    <button
+                        onClick={() => setShowFullAuditModal(true)}
+                        className="text-cyan font-bold hover:underline"
+                    >
+                        View all {allAuditEvents.length} events →
+                    </button>
+                </div>
+            </motion.div>
+
+            {/* ── System Audit Detail Modal ── */}
+            <AuditEventDetailModal
+                event={selectedAuditEvent}
+                onClose={() => setSelectedAuditEvent(null)}
+            />
+
+            {/* ── Full Audit Log Modal ── */}
+            <FullAuditLogModal
+                isOpen={showFullAuditModal}
+                onClose={() => setShowFullAuditModal(false)}
+                events={allAuditEvents}
+                onSelectEvent={(ev) => setSelectedAuditEvent(ev)}
+            />
         </div>
     );
 }

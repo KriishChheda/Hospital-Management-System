@@ -73,11 +73,32 @@ function StatusBadge({ status }: { status: string }) {
     WAITING: "Waiting", IN_PROGRESS: "Consulting", DEFERRED: "Deferred",
   };
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cfg[status] || ""}`}>
+    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap ${cfg[status] || ""}`}>
       {label[status] || status}
     </span>
   );
 }
+
+const ChevronUpIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="18 15 12 9 6 15" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const RefreshIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+    <path d="M16 21h5v-5" />
+  </svg>
+);
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function QueueManagerPage() {
@@ -165,9 +186,10 @@ export default function QueueManagerPage() {
           <button
             onClick={fetchQueue}
             disabled={loading}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg border border-soft-blue bg-white text-navy hover:bg-light-grey transition-all active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-soft-blue bg-white text-navy hover:bg-light-grey transition-all active:scale-95 disabled:opacity-50"
           >
-            {loading ? "Refreshing…" : "↺ Refresh"}
+            <RefreshIcon className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan" : "text-navy"}`} />
+            <span>{loading ? "Refreshing..." : "Refresh"}</span>
           </button>
         </div>
       </header>
@@ -233,19 +255,19 @@ export default function QueueManagerPage() {
             <div className="py-12 text-center text-sm text-grey">No patients in queue for this doctor.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm table-fixed min-w-[840px]">
+              <table className="w-full text-left text-sm min-w-[980px]">
                 <colgroup>
                   <col className="w-14" />
-                  <col className="w-[24%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[26%]" />
+                  <col />
+                  <col className="w-24" />
+                  <col className="w-28" />
+                  <col className="w-28" />
+                  <col className="w-28" />
+                  <col className="w-80" />
                 </colgroup>
                 <thead>
                   <tr className="bg-light-grey text-[11px] font-bold text-grey uppercase tracking-wider">
-                    <th className="px-4 py-2.5 w-14">#</th>
+                    <th className="px-4 py-2.5">#</th>
                     <th className="px-4 py-2.5">Patient</th>
                     <th className="px-4 py-2.5">Severity</th>
                     <th className="px-4 py-2.5">Type</th>
@@ -257,6 +279,11 @@ export default function QueueManagerPage() {
                 <tbody className="divide-y divide-soft-blue/40">
                   {allActive.map((p) => {
                     const isConsulting = p.status === "IN_PROGRESS";
+                    const waitingPatients = allActive.filter((item) => item.status === "WAITING");
+                    const waitingIndex = waitingPatients.findIndex((item) => item.queueEntryId === p.queueEntryId);
+                    const isFirstWaiting = waitingIndex === 0;
+                    const isLastWaiting = waitingIndex === waitingPatients.length - 1;
+
                     return (
                       <tr
                         key={p.queueEntryId}
@@ -291,24 +318,28 @@ export default function QueueManagerPage() {
                         </td>
 
                         {/* Status */}
-                        <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                        <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.status} /></td>
 
                         {/* Actions */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap shrink-0">
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             {p.status === "WAITING" && (
                               <>
                                 <ActionBtn
                                   label="Up"
-                                  title="Bump Up (+30)"
+                                  icon={<ChevronUpIcon className="w-3 h-3" />}
+                                  title={isFirstWaiting ? "Already at top of waiting queue" : "Move up 1 position"}
                                   color="blue"
+                                  disabled={isFirstWaiting}
                                   loading={actionLoading === p.queueEntryId + "BUMP_UP"}
                                   onClick={() => doAction(p.queueEntryId, "BUMP_UP")}
                                 />
                                 <ActionBtn
                                   label="Down"
-                                  title="Bump Down (-30)"
+                                  icon={<ChevronDownIcon className="w-3 h-3" />}
+                                  title={isLastWaiting ? "Already at end of waiting queue" : "Move down 1 position"}
                                   color="grey"
+                                  disabled={isLastWaiting}
                                   loading={actionLoading === p.queueEntryId + "BUMP_DOWN"}
                                   onClick={() => doAction(p.queueEntryId, "BUMP_DOWN")}
                                 />
@@ -391,28 +422,33 @@ export default function QueueManagerPage() {
 
 // ── Action Button Sub-component ──────────────────────────────────────────────
 function ActionBtn({
-  label, title, color, loading, onClick,
+  label, title, color, loading, disabled, icon, onClick,
 }: {
   label: string; title: string;
   color: "blue" | "grey" | "red" | "amber" | "cyan" | "green";
-  loading: boolean; onClick: () => void;
+  loading: boolean; disabled?: boolean; icon?: React.ReactNode; onClick: () => void;
 }) {
   const colors: Record<string, string> = {
-    blue:  "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
-    grey:  "bg-light-grey text-grey border-soft-blue hover:bg-soft-blue",
-    red:   "bg-red-50 text-red-700 border-red-200 hover:bg-red-100",
-    amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
-    cyan:  "bg-cyan text-white border-cyan hover:bg-navy shadow-sm shadow-cyan/20",
-    green: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+    blue:  "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 disabled:bg-blue-50/40 disabled:text-blue-300 disabled:border-blue-100 disabled:cursor-not-allowed",
+    grey:  "bg-light-grey text-navy border-soft-blue hover:bg-soft-blue/30 disabled:opacity-40 disabled:cursor-not-allowed",
+    red:   "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed",
+    amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed",
+    cyan:  "bg-cyan text-white border-cyan hover:bg-navy shadow-sm shadow-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed",
   };
   return (
     <button
       onClick={onClick}
-      disabled={loading}
+      disabled={disabled || loading}
       title={title}
-      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap shrink-0 ${colors[color]}`}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-all active:scale-95 whitespace-nowrap shrink-0 ${colors[color]}`}
     >
-      {loading ? "…" : label}
+      {loading ? "..." : (
+        <>
+          {icon}
+          <span>{label}</span>
+        </>
+      )}
     </button>
   );
 }

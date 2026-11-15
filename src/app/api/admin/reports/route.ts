@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { getSystemAuditTrail } from "@/lib/systemAudit";
 
 export async function GET() {
     try {
@@ -31,9 +32,6 @@ export async function GET() {
             dispensedPrescriptionsToday,
             pendingPrescriptions,
             lowStockMedicinesCount,
-            recentVisits,
-            recentLabOrders,
-            recentPrescriptions,
             approvedStaffList,
             pendingStaffApprovalsCount,
             allVisitsForChart,
@@ -99,44 +97,7 @@ export async function GET() {
             prisma.prescription.count({ where: { status: "PENDING" } }),
             prisma.medicine.count({ where: { currentStock: { lte: 10 } } }),
 
-            // 8. Recent Activities (Visits, Labs, Prescriptions)
-            prisma.visit.findMany({
-                take: 8,
-                orderBy: { createdAt: "desc" },
-                select: {
-                    id: true,
-                    createdAt: true,
-                    paymentStatus: true,
-                    registrationFee: true,
-                    patient: { select: { name: true, patientCode: true } },
-                    doctorProfile: { select: { fullName: true } },
-                },
-            }),
-            prisma.labOrder.findMany({
-                take: 6,
-                orderBy: { createdAt: "desc" },
-                select: {
-                    id: true,
-                    testName: true,
-                    doctorName: true,
-                    status: true,
-                    createdAt: true,
-                    flaggedAlert: true,
-                },
-            }),
-            prisma.prescription.findMany({
-                take: 6,
-                orderBy: { createdAt: "desc" },
-                select: {
-                    id: true,
-                    doctorName: true,
-                    status: true,
-                    createdAt: true,
-                    visit: { select: { patient: { select: { name: true } } } },
-                },
-            }),
-
-            // 9. Staff Members
+            // 8. Staff Members
             prisma.user.findMany({
                 where: { status: true },
                 orderBy: { createdAt: "desc" },
@@ -159,68 +120,9 @@ export async function GET() {
             }),
         ]);
 
-        // Build combined live activity feed
-        interface LiveActivity {
-            id: string;
-            time: string;
-            timestamp: number;
-            text: string;
-            user: string;
-            type: "reg" | "bill" | "lab" | "vital" | "pharmacy";
-        }
-
-        const activities: LiveActivity[] = [];
-
-        // Add visits / registrations
-        recentVisits.forEach((v) => {
-            const timeAgo = formatTimeAgo(new Date(v.createdAt));
-            activities.push({
-                id: `v-${v.id}`,
-                time: timeAgo,
-                timestamp: new Date(v.createdAt).getTime(),
-                text: `Patient Visit: ${v.patient.name} (${v.patient.patientCode})`,
-                user: v.doctorProfile?.fullName ? `Dr. ${v.doctorProfile.fullName}` : "Reception Desk",
-                type: "reg",
-            });
-            if (v.paymentStatus) {
-                activities.push({
-                    id: `pay-${v.id}`,
-                    time: timeAgo,
-                    timestamp: new Date(v.createdAt).getTime() + 1,
-                    text: `Payment Collected: ₹${v.registrationFee} (${v.patient.patientCode})`,
-                    user: "Billing Cashier",
-                    type: "bill",
-                });
-            }
-        });
-
-        // Add lab orders
-        recentLabOrders.forEach((l) => {
-            activities.push({
-                id: `lab-${l.id}`,
-                time: formatTimeAgo(new Date(l.createdAt)),
-                timestamp: new Date(l.createdAt).getTime(),
-                text: `Lab Order: ${l.testName} · ${l.status}`,
-                user: l.doctorName || "Physician",
-                type: "lab",
-            });
-        });
-
-        // Add prescriptions
-        recentPrescriptions.forEach((p) => {
-            activities.push({
-                id: `rx-${p.id}`,
-                time: formatTimeAgo(new Date(p.createdAt)),
-                timestamp: new Date(p.createdAt).getTime(),
-                text: `Prescription ${p.status.toLowerCase()} for ${p.visit.patient.name}`,
-                user: p.doctorName || "Pharmacy Desk",
-                type: "pharmacy",
-            });
-        });
-
-        // Sort combined activities by timestamp descending
-        activities.sort((a, b) => b.timestamp - a.timestamp);
-        const topActivities = activities.slice(0, 7);
+        // Fetch comprehensive system audit trail across all hospital domains & system infrastructure
+        const auditReport = await getSystemAuditTrail(50);
+        const topActivities = auditReport.events.slice(0, 8);
 
         // Chart aggregation by Granularity (hour, day, week, month)
         // 1. Hourly (past 24 hours)
@@ -356,6 +258,8 @@ export async function GET() {
                 },
             },
             activities: topActivities,
+            allAuditEvents: auditReport.events,
+            auditSummary: auditReport.summary,
             staff: staffMembers,
             pendingStaffApprovalsCount,
             charts: {
