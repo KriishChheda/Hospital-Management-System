@@ -58,9 +58,9 @@ function SeverityBadge({ level }: { level: string }) {
 function TypeBadge({ type, scheduledTime }: { type: string; scheduledTime: string | null }) {
   if (type === "appointment" && scheduledTime) {
     const t = new Date(scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    return <span className="text-[10px] font-bold text-cyan bg-cyan/10 border border-cyan/20 px-2 py-0.5 rounded-md">📅 {t}</span>;
+    return <span className="text-[10px] font-bold text-cyan bg-cyan/10 border border-cyan/20 px-2 py-0.5 rounded-md">{t}</span>;
   }
-  return <span className="text-[10px] font-bold text-grey bg-grey/10 border border-grey/20 px-2 py-0.5 rounded-md">🚶 Walk-in</span>;
+  return <span className="text-[10px] font-bold text-grey bg-grey/10 border border-grey/20 px-2 py-0.5 rounded-md">Walk-in</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -70,7 +70,7 @@ function StatusBadge({ status }: { status: string }) {
     DEFERRED:    "bg-gray-50 text-gray-500 border-gray-200",
   };
   const label: Record<string, string> = {
-    WAITING: "Waiting", IN_PROGRESS: "▶ Consulting", DEFERRED: "⏸ Deferred",
+    WAITING: "Waiting", IN_PROGRESS: "Consulting", DEFERRED: "Deferred",
   };
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${cfg[status] || ""}`}>
@@ -201,7 +201,7 @@ export default function QueueManagerPage() {
 
       {/* ── Stats Strip ── */}
       {selectedDoctor && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "In Queue", value: allActive.filter((p) => p.status === "WAITING").length, color: "text-blue-600 bg-blue-50 border-blue-200" },
             { label: "Consulting", value: allActive.filter((p) => p.status === "IN_PROGRESS").length, color: "text-violet-600 bg-violet-50 border-violet-200" },
@@ -233,10 +233,19 @@ export default function QueueManagerPage() {
             <div className="py-12 text-center text-sm text-grey">No patients in queue for this doctor.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left text-sm table-fixed min-w-[840px]">
+                <colgroup>
+                  <col className="w-14" />
+                  <col className="w-[24%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[26%]" />
+                </colgroup>
                 <thead>
                   <tr className="bg-light-grey text-[11px] font-bold text-grey uppercase tracking-wider">
-                    <th className="px-4 py-2.5 w-12">#</th>
+                    <th className="px-4 py-2.5 w-14">#</th>
                     <th className="px-4 py-2.5">Patient</th>
                     <th className="px-4 py-2.5">Severity</th>
                     <th className="px-4 py-2.5">Type</th>
@@ -265,8 +274,8 @@ export default function QueueManagerPage() {
 
                         {/* Patient info */}
                         <td className="px-4 py-3">
-                          <p className="font-bold text-navy text-sm">{p.name}</p>
-                          <p className="text-xs text-grey font-mono">{p.patientCode} · {p.gender} · {p.age}y</p>
+                          <p className="font-bold text-navy text-sm truncate">{p.name}</p>
+                          <p className="text-xs text-grey font-mono truncate">{p.patientCode} · {p.gender} · {p.age}y</p>
                         </td>
 
                         {/* Severity */}
@@ -286,39 +295,39 @@ export default function QueueManagerPage() {
 
                         {/* Actions */}
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap shrink-0">
                             {p.status === "WAITING" && (
                               <>
                                 <ActionBtn
-                                  label="▲"
+                                  label="Up"
                                   title="Bump Up (+30)"
                                   color="blue"
                                   loading={actionLoading === p.queueEntryId + "BUMP_UP"}
                                   onClick={() => doAction(p.queueEntryId, "BUMP_UP")}
                                 />
                                 <ActionBtn
-                                  label="▼"
+                                  label="Down"
                                   title="Bump Down (-30)"
                                   color="grey"
                                   loading={actionLoading === p.queueEntryId + "BUMP_DOWN"}
                                   onClick={() => doAction(p.queueEntryId, "BUMP_DOWN")}
                                 />
                                 <ActionBtn
-                                  label="🔴 Urgent"
+                                  label="Urgent"
                                   title="Mark as urgent (instant top)"
                                   color="red"
                                   loading={actionLoading === p.queueEntryId + "URGENT"}
                                   onClick={() => doAction(p.queueEntryId, "URGENT")}
                                 />
                                 <ActionBtn
-                                  label="⏸ Defer"
+                                  label="Defer"
                                   title="Defer patient (stepped out, etc.)"
                                   color="amber"
                                   loading={actionLoading === p.queueEntryId + "DEFER"}
                                   onClick={() => doAction(p.queueEntryId, "DEFER")}
                                 />
                                 <ActionBtn
-                                  label="▶ Call"
+                                  label="Call"
                                   title="Call this patient"
                                   color="cyan"
                                   loading={actionLoading === p.queueEntryId + "IN_PROGRESS"}
@@ -328,7 +337,7 @@ export default function QueueManagerPage() {
                             )}
                             {p.status === "IN_PROGRESS" && (
                               <ActionBtn
-                                label="✓ Done"
+                                label="Done"
                                 title="Mark consultation complete"
                                 color="green"
                                 loading={actionLoading === p.queueEntryId + "COMPLETE"}
@@ -351,21 +360,21 @@ export default function QueueManagerPage() {
       {deferred.length > 0 && (
         <div className="bg-white rounded-2xl border border-soft-blue shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-soft-blue bg-light-grey/50">
-            <h2 className="text-sm font-black text-grey">⏸ Deferred Patients ({deferred.length})</h2>
+            <h2 className="text-sm font-black text-grey">Deferred Patients ({deferred.length})</h2>
             <p className="text-xs text-grey/60 mt-0.5">Patients who stepped out. Resume to re-add to queue.</p>
           </div>
           <div className="divide-y divide-soft-blue/40">
             {deferred.map((p) => (
               <div key={p.queueEntryId} className="flex items-center justify-between px-5 py-3 gap-4">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 min-w-0">
                   <SeverityBadge level={p.critical} />
-                  <div>
-                    <p className="text-sm font-bold text-navy">{p.name}</p>
-                    <p className="text-xs font-mono text-grey">{p.patientCode} · waited {p.waitingLabel}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-navy truncate">{p.name}</p>
+                    <p className="text-xs font-mono text-grey truncate">{p.patientCode} · waited {p.waitingLabel}</p>
                   </div>
                 </div>
                 <ActionBtn
-                  label="▶ Resume"
+                  label="Resume"
                   title="Return to active queue"
                   color="cyan"
                   loading={actionLoading === p.queueEntryId + "RESUME"}
@@ -401,7 +410,7 @@ function ActionBtn({
       onClick={onClick}
       disabled={loading}
       title={title}
-      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap ${colors[color]}`}
+      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap shrink-0 ${colors[color]}`}
     >
       {loading ? "…" : label}
     </button>

@@ -76,7 +76,7 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
 
     const getAISuggestions = () => {
         if (!chiefComplaint && !clinicalNotes) return "AI Copilot: Update context fields or symptoms to prompt automated diagnostic warnings.";
-        let checks: string[] = [];
+        const checks: string[] = [];
         const allergies = patientData?.allergies?.toLowerCase() || "";
         if (allergies.includes("penicillin") || allergies.includes("amoxicillin")) {
             checks.push("ALLERGY WARNING: Background records indicate a severe allergic reaction history to Penicillin / Amoxicillin family variants.");
@@ -86,7 +86,7 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
             if (hasAsthma) checks.push("CLINICAL INSIGHT: Given active history of Asthma, favor bronchodilators over standard system Beta-blockers.");
         }
         if (patientData?.critical === "high") {
-            checks.push("⚠ PRIORITY: This patient is flagged as HIGH CRITICAL at registration. Prioritize immediate assessment.");
+            checks.push("PRIORITY: This patient is flagged as HIGH CRITICAL at registration. Prioritize immediate assessment.");
         }
         return checks.length > 0 ? checks.join("\n\n") : "Clinical checks standard. No system contraindications flagged.";
     };

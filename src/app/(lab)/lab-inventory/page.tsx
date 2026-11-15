@@ -38,7 +38,7 @@ export default function LabInventory() {
             {/* Raw Inventory Table Summary */}
             <div className="bg-white rounded-2xl p-6 border border-soft-blue shadow-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[650px]">
                         <thead>
                             <tr className="border-b border-soft-blue text-xs font-bold text-grey uppercase tracking-wider">
                                 <th className="pb-3">Item Token ID</th>

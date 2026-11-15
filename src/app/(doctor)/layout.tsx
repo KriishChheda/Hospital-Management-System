@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import ResizableSidebar from "@/components/ResizableSidebar";
 
 // ── SVG Icon Components ──
 const HospitalIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
@@ -38,11 +39,17 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     return (
         <div className="flex h-screen bg-light-grey">
             {/* Sidebar */}
-            <aside className="w-64 bg-navy text-white p-6 flex flex-col justify-between shadow-xl shrink-0">
+            <ResizableSidebar
+                defaultWidth={256}
+                minWidth={190}
+                maxWidth={440}
+                storageKey="bizlume_doctor_sidebar_width"
+                className="bg-navy text-white p-6 shadow-xl"
+            >
                 <div className="space-y-8">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-cyan rounded-lg flex items-center justify-center text-navy font-black">D</div>
-                        <div className="text-xl font-black tracking-tighter">
+                        <div className="w-8 h-8 bg-cyan rounded-lg flex items-center justify-center text-navy font-black shrink-0">D</div>
+                        <div className="text-xl font-black tracking-tighter truncate">
                             BIZLUME <span className="text-cyan text-[10px] tracking-widest block">DOCTOR PORTAL</span>
                         </div>
                     </div>
@@ -63,7 +70,7 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                     </nav>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 pt-6">
                     <div className="p-3 rounded-xl bg-white/5 text-xs text-grey">
                         <p className="font-bold text-white">Physician Portal</p>
                         <p className="mt-1">Role-based access active</p>
@@ -72,13 +79,13 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-status-red/20 text-status-red transition-all font-bold text-sm border border-status-red/10"
                     >
-                        <LogOutIcon /> Sign Out
+                        <LogOutIcon /> <span className="truncate">Sign Out</span>
                     </button>
                 </div>
-            </aside>
+            </ResizableSidebar>
 
             {/* Main Content Area */}
-            <main className="flex-1 p-10 overflow-y-auto">
+            <main className="flex-1 min-w-0 p-6 md:p-8 lg:p-10 overflow-y-auto">
                 <div className="max-w-6xl mx-auto">
                     {children}
                 </div>

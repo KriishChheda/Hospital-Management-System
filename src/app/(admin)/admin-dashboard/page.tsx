@@ -142,7 +142,7 @@ export default function AdminDashboard() {
                 className="bg-white rounded-3xl border border-soft-blue overflow-hidden shadow-sm"
             >
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[700px]">
                         <thead className="bg-light-grey border-b border-soft-blue">
                             <tr>
                                 {["Professional Details", "Employee Identity", "Requested On", "Target Role", "Action"].map((col) => (

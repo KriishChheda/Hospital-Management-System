@@ -85,7 +85,7 @@ export default function LabDashboard() {
                     <p className="text-xs font-bold text-grey py-4">Fetching laboratory pipeline grids...</p>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[760px]">
                             <thead>
                                 <tr className="border-b border-soft-blue text-xs font-bold text-grey uppercase tracking-wider">
                                     <th className="pb-3">Patient Profile</th>

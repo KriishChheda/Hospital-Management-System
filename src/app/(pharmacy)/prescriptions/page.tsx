@@ -103,8 +103,9 @@ export default function PrescriptionsPage() {
             {/* Medicine Items */}
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {p.items.map((item, j) => (
-                <div key={j} className="bg-light-grey rounded-xl px-3 py-2 text-xs font-bold text-navy">
-                  💊 {item.medicine.name} — {item.dosage} × {item.quantity}
+                <div key={j} className="bg-light-grey rounded-xl px-3 py-2 text-xs font-bold text-navy flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan shrink-0" />
+                  <span>{item.medicine.name} — {item.dosage} × {item.quantity}</span>
                 </div>
               ))}
             </div>
@@ -116,13 +117,13 @@ export default function PrescriptionsPage() {
                   onClick={() => updateStatus(p.id, "DISPENSED")}
                   className="bg-cyan text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-navy transition-all"
                 >
-                  ✓ Mark Dispensed
+                  Mark Dispensed
                 </button>
                 <button
                   onClick={() => updateStatus(p.id, "CANCELLED")}
                   className="bg-red-50 text-status-red px-4 py-2 rounded-xl text-xs font-black hover:bg-red-100 transition-all border border-red-200"
                 >
-                  ✕ Cancel
+                  Cancel
                 </button>
               </div>
             )}
@@ -131,7 +132,13 @@ export default function PrescriptionsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-16 text-grey">
-            <p className="text-4xl mb-3">📋</p>
+            <div className="w-12 h-12 bg-soft-blue text-navy rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+            </div>
             <p className="font-bold">No prescriptions found</p>
           </div>
         )}

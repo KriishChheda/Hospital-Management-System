@@ -102,7 +102,7 @@ export default function InventoryPage() {
               filter === f ? "bg-cyan text-white shadow-md" : "bg-white border border-soft-blue text-grey hover:border-cyan"
             }`}
           >
-            {f === "LOW" ? "⚠️ Low Stock" : f === "EXPIRING" ? "📅 Expiring Soon" : "All Medicines"}
+            {f === "LOW" ? "Low Stock" : f === "EXPIRING" ? "Expiring Soon" : "All Medicines"}
           </button>
         ))}
         <input
@@ -116,7 +116,8 @@ export default function InventoryPage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-soft-blue overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
           <thead className="bg-light-grey border-b border-soft-blue">
             <tr>
               {["Medicine", "Category", "Stock", "Unit Price", "Expiry", "Batch", "Actions"].map((h) => (
@@ -153,7 +154,7 @@ export default function InventoryPage() {
                   <td className="px-5 py-3">
                     {m.expiryDate ? (
                       <span className={`text-xs font-bold ${isExpired ? "text-status-red" : isExpiring ? "text-status-orange" : "text-grey"}`}>
-                        {isExpired ? "⛔ EXPIRED " : isExpiring ? "⚠️ " : ""}
+                        {isExpired ? "EXPIRED " : isExpiring ? "Expiring Soon: " : ""}
                         {new Date(m.expiryDate).toLocaleDateString("en-IN")}
                       </span>
                     ) : "—"}
@@ -170,9 +171,15 @@ export default function InventoryPage() {
             })}
           </tbody>
         </table>
+        </div>
         {filtered.length === 0 && (
           <div className="text-center py-12 text-grey">
-            <p className="text-3xl mb-2">💊</p>
+            <div className="w-12 h-12 bg-soft-blue text-navy rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.5 20.5l10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7z" />
+                <path d="M8.5 8.5l7 7" />
+              </svg>
+            </div>
             <p className="font-bold">No medicines found</p>
           </div>
         )}
@@ -202,7 +209,7 @@ export default function InventoryPage() {
                   <label className="text-xs font-bold text-grey">{label}</label>
                   <input
                     type={type}
-                    value={(newMed as any)[field]}
+                    value={((newMed as Record<string, unknown>)[field] as string | number | undefined) ?? ""}
                     onChange={(e) => setNewMed((p) => ({ ...p, [field]: type === "number" ? +e.target.value : e.target.value }))}
                     className="p-2.5 bg-light-grey border border-soft-blue rounded-xl outline-none focus:ring-2 focus:ring-cyan text-sm"
                   />

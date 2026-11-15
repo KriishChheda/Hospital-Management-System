@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { formatTimeSlot } from "@/lib/timeUtils";
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const SPECIALIZATIONS = [
@@ -14,7 +14,6 @@ const SPECIALIZATIONS = [
 type WeeklySlots = Record<string, string[]>;
 
 export default function DoctorProfilePage() {
-    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -83,7 +82,8 @@ export default function DoctorProfilePage() {
     const addSlot = (day: string) => {
         const val = newSlot[day]?.trim();
         if (!val) return;
-        setWeeklySlots(prev => ({ ...prev, [day]: [...(prev[day] || []), val] }));
+        const formatted = formatTimeSlot(val);
+        setWeeklySlots(prev => ({ ...prev, [day]: [...(prev[day] || []), formatted] }));
         setNewSlot(prev => ({ ...prev, [day]: "" }));
     };
 
@@ -205,8 +205,12 @@ export default function DoctorProfilePage() {
                             <div className="flex flex-wrap gap-1.5 mb-2">
                                 {(weeklySlots[day] || []).map((slot, idx) => (
                                     <span key={idx} className="inline-flex items-center gap-1 bg-navy/10 text-navy text-xs font-bold px-2.5 py-1 rounded-lg">
-                                        {slot}
-                                        <button onClick={() => removeSlot(day, idx)} className="text-status-red hover:text-status-red/80 ml-0.5 font-black text-[10px]">✕</button>
+                                        {formatTimeSlot(slot)}
+                                        <button onClick={() => removeSlot(day, idx)} title="Remove slot" className="text-status-red hover:text-status-red/80 ml-0.5">
+                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                        </button>
                                     </span>
                                 ))}
                             </div>
@@ -219,7 +223,7 @@ export default function DoctorProfilePage() {
                                     onChange={e => setNewSlot(prev => ({ ...prev, [day]: e.target.value }))}
                                     onKeyDown={e => e.key === "Enter" && addSlot(day)}
                                     className="flex-1 bg-white text-navy text-xs font-semibold p-2 rounded-lg border border-soft-blue/40 focus:outline-none"
-                                    placeholder="e.g., 09:00 - 12:00"
+                                    placeholder="e.g., 09:00 AM - 12:00 PM"
                                 />
                                 <button onClick={() => addSlot(day)} className="bg-navy text-white text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap">
                                     + Add

@@ -47,8 +47,8 @@ function PulseDot({ className = "" }: { className?: string }) {
 }
 
 function SeverityBar({ level }: { level: string }) {
-    const colors = { high: "bg-red-500", medium: "bg-amber-400", low: "bg-emerald-500" };
-    return <div className={`w-[3px] self-stretch min-h-[38px] rounded-full mx-[10px] flex-shrink-0 ${(colors as any)[level] ?? "bg-grey"}`} />;
+    const colors: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-400", low: "bg-emerald-500" };
+    return <div className={`w-[3px] self-stretch min-h-[38px] rounded-full mx-[10px] flex-shrink-0 ${colors[level] ?? "bg-grey"}`} />;
 }
 
 function CriticalBadge({ level }: { level: string }) {
@@ -68,9 +68,9 @@ function CriticalBadge({ level }: { level: string }) {
 function TypeBadge({ type, scheduledTime }: { type: string; scheduledTime: string | null }) {
     if (type === "appointment" && scheduledTime) {
         const t = new Date(scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        return <span className="text-[10px] font-bold text-cyan">📅 {t}</span>;
+        return <span className="text-[10px] font-bold text-cyan">{t}</span>;
     }
-    return <span className="text-[10px] text-grey">🚶 Walk-in</span>;
+    return <span className="text-[10px] text-grey">Walk-in</span>;
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
@@ -149,9 +149,40 @@ export default function DoctorDashboard() {
     const animatedDeferred = useCountUp(deferred.length, 400, cardsVisible);
 
     const STAT_CARDS = [
-        { label: "Waiting", value: animatedWaiting,  icon: "⏳", bg: "bg-blue-50",    text: "text-blue-600" },
-        { label: "Critical alerts", value: animatedCritical, icon: "⚠", bg: "bg-red-50",  text: "text-red-600" },
-        { label: "Deferred", value: animatedDeferred, icon: "⏸", bg: "bg-amber-50",    text: "text-amber-600" },
+        {
+            label: "Waiting",
+            value: animatedWaiting,
+            icon: (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                </svg>
+            ),
+            bg: "bg-blue-50",
+            text: "text-blue-600",
+        },
+        {
+            label: "Critical alerts",
+            value: animatedCritical,
+            icon: (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+            ),
+            bg: "bg-red-50",
+            text: "text-red-600",
+        },
+        {
+            label: "Deferred",
+            value: animatedDeferred,
+            icon: (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+                </svg>
+            ),
+            bg: "bg-amber-50",
+            text: "text-amber-600",
+        },
     ];
 
     return (
@@ -231,7 +262,7 @@ export default function DoctorDashboard() {
                             disabled={actionLoading === consultingNow.queueEntryId + "COMPLETE"}
                             className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 transition-all active:scale-95 disabled:opacity-50"
                         >
-                            {actionLoading === consultingNow.queueEntryId + "COMPLETE" ? "…" : "✓ Done"}
+                            {actionLoading === consultingNow.queueEntryId + "COMPLETE" ? "…" : "Done"}
                         </button>
                     </div>
                 </div>
@@ -260,7 +291,7 @@ export default function DoctorDashboard() {
                             disabled={!!consultingNow || !!actionLoading}
                             className="text-xs font-bold px-4 py-2 rounded-lg bg-cyan text-white hover:bg-navy transition-all active:scale-95 disabled:opacity-50 shadow-sm shadow-cyan/20"
                         >
-                            {consultingNow ? "Finish current first" : "▶ Call Next Patient"}
+                            {consultingNow ? "Finish current first" : "Call Next Patient"}
                         </button>
                     )}
                 </div>
@@ -269,11 +300,11 @@ export default function DoctorDashboard() {
                     <div className="py-10 text-center text-sm text-gray-600">Loading your queue…</div>
                 ) : active.filter((p) => p.status === "WAITING").length === 0 && !consultingNow ? (
                     <div className="py-10 text-center text-sm text-gray-600">
-                        {doctorProfileId ? "No patients waiting — queue is clear! 🎉" : "Setting up your profile…"}
+                        {doctorProfileId ? "No patients waiting — queue is clear." : "Setting up your profile…"}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left" style={{ tableLayout: "fixed" }}>
+                        <table className="w-full text-left min-w-[720px]" style={{ tableLayout: "fixed" }}>
                             <colgroup>
                                 <col style={{ width: "6%" }} />
                                 <col style={{ width: "28%" }} />
@@ -298,7 +329,7 @@ export default function DoctorDashboard() {
                                         key={p.queueEntryId}
                                         className="group hover:bg-gray-50 transition-colors"
                                         style={{
-                                            opacity: cardsVisible ? 1 : 0,
+                                             opacity: cardsVisible ? 1 : 0,
                                             transform: cardsVisible ? "translateX(0)" : "translateX(-6px)",
                                             transition: `opacity 0.3s ease ${i * 60}ms, transform 0.3s ease ${i * 60}ms`,
                                         }}
@@ -351,7 +382,7 @@ export default function DoctorDashboard() {
                                                     disabled={!!consultingNow || !!actionLoading}
                                                     className="text-xs font-bold px-3 py-1.5 rounded-lg bg-cyan text-white hover:bg-navy transition-all active:scale-95 disabled:opacity-40 shadow-sm shadow-cyan/20"
                                                 >
-                                                    {actionLoading === p.queueEntryId + "IN_PROGRESS" ? "…" : "▶ Call"}
+                                                    {actionLoading === p.queueEntryId + "IN_PROGRESS" ? "…" : "Call"}
                                                 </button>
                                                 <Link
                                                     href={`/emr/${p.visitId}`}
@@ -372,7 +403,7 @@ export default function DoctorDashboard() {
             {/* Deferred patients (small section at bottom) */}
             {deferred.length > 0 && (
                 <div className="bg-gray-50 rounded-xl border border-gray-100 px-5 py-4">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">⏸ Deferred ({deferred.length})</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Deferred ({deferred.length})</p>
                     <div className="space-y-2">
                         {deferred.map((p) => (
                             <div key={p.queueEntryId} className="flex items-center justify-between gap-3">

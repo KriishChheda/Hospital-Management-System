@@ -408,7 +408,8 @@ export default function LandingPage() {
                   P95 API latency for local CRUD and dashboard retrieval.
                 </p>
                 <span className="inline-flex items-center gap-1.5 mt-4 text-[11px] font-bold text-cyan uppercase tracking-wider bg-soft-blue px-3 py-1.5 rounded-full border border-cyan/20">
-                  ● LAN-native speed
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan inline-block" />
+                  LAN-native speed
                 </span>
               </BentoCard>
             </div>
