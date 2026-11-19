@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 // POST /api/prebook/[id]/arrive
 //
@@ -7,9 +8,12 @@ import prisma from "@/lib/db";
 // This is the ONLY place a QueueEntry is created for a pre-booked patient.
 // The patient joins the live queue with their scheduledTime bonus applied.
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(req, ["RECEPTIONIST", "ADMIN"]);
+  if (!auth.success) return auth.response;
+
   try {
     const { id } = await params;
 

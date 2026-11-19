@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const auth = await requireAuth(request, ["DOCTOR"]);
+    if (!auth.success) return auth.response;
+
     try {
         const { id } = await params;
 

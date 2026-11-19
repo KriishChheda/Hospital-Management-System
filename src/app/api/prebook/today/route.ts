@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 // GET /api/prebook/today
 // Returns all APPROVED pre-bookings whose approvedSlot falls on today's date.
 // These are patients confirmed but NOT yet in the queue — shown in the
 // "Booked Today" panel. Receptionist clicks "Mark as Arrived" to add to queue.
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAuth(request, ["RECEPTIONIST", "ADMIN"]);
+  if (!auth.success) return auth.response;
+
   try {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSystemAuditTrail } from "@/lib/systemAudit";
+import { requireAuth } from "@/lib/authGuard";
 
-export async function GET() {
+export async function GET(request: Request) {
+    const auth = await requireAuth(request, ["ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);

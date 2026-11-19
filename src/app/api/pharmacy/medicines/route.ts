@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 export async function GET(request: Request) {
+    const auth = await requireAuth(request, ["PHARMACIST", "DOCTOR", "ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const { searchParams } = new URL(request.url);
         const category = searchParams.get("category");
@@ -36,6 +40,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    const auth = await requireAuth(request, ["PHARMACIST", "ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const body = await request.json();
         const {

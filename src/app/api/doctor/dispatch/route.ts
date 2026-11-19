@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { recordAuditLog } from "@/lib/systemAudit";
+import { requireAuth } from "@/lib/authGuard";
 
 export async function POST(request: Request) {
+    const auth = await requireAuth(request, ["DOCTOR"]);
+    if (!auth.success) return auth.response;
+
     try {
         const body = await request.json();
         const { visitId, doctorId, doctorName, chiefComplaint, clinicalNotes, diagnosis, aiSuggestions, consultationFee, medicines, labTests } = body;
@@ -15,6 +20,11 @@ export async function POST(request: Request) {
                 { status: 400 }
             );
         }
+
+        const targetVisit = await prisma.visit.findUnique({
+            where: { id: targetVisitId },
+            select: { patient: { select: { patientCode: true, name: true } } },
+        });
 
         // 1. Update the consultation fee (if provided)
         if (consultationFee !== undefined && consultationFee !== null) {
@@ -40,7 +50,7 @@ export async function POST(request: Request) {
             }
         });
 
-        // 1. If medicine prescriptions exist, dispatch them to the pharmacy line item collections
+        // 3. If medicine prescriptions exist, dispatch them to the pharmacy line item collections
         if (medicines && medicines.length > 0) {
             await prisma.prescription.create({
                 data: {
@@ -60,9 +70,35 @@ export async function POST(request: Request) {
                     },
                 },
             });
+
+            // Audit Log: Prescription Creation
+            if (targetVisit?.patient) {
+                recordAuditLog({
+                    action: "CREATE_PRESCRIPTION",
+                    category: "PHARMACY",
+                    type: "pharmacy",
+                    severity: "info",
+                    title: `Prescription Created: ${medicines.length} item(s)`,
+                    summary: `Prescription with ${medicines.length} medicine(s) created by Dr. ${doctorName || "Doctor"} for ${targetVisit.patient.name} (${targetVisit.patient.patientCode}).`,
+                    actor: {
+                        name: doctorName ? `Dr. ${doctorName}` : "Attending Doctor",
+                        role: "Doctor",
+                        badge: "CLINICAL",
+                    },
+                    patientCode: targetVisit.patient.patientCode,
+                    patientName: targetVisit.patient.name,
+                    outcome: "SUCCESS",
+                    details: {
+                        "Prescription Item Count": `${medicines.length} medicine(s)`,
+                        "Prescribing Doctor": doctorName ? `Dr. ${doctorName}` : "Doctor",
+                        "Dispensing Status": "PENDING Pharmacy Fulfillment",
+                        "Outcome": "SUCCESS",
+                    },
+                });
+            }
         }
 
-        // 2. If lab testing orders are flagged, dispatch them to Lab Dashboard records
+        // 4. If lab testing orders are flagged, dispatch them to Lab Dashboard records
         if (labTests && labTests.length > 0) {
             for (const test of labTests) {
                 await prisma.labOrder.create({
@@ -73,6 +109,32 @@ export async function POST(request: Request) {
                         testName: test.name,
                         category: test.category || "General Routine",
                         status: "PENDING",
+                    },
+                });
+            }
+
+            // Audit Log: Lab Orders Dispatch
+            if (targetVisit?.patient) {
+                recordAuditLog({
+                    action: "DISPATCH_LAB_ORDERS",
+                    category: "LABORATORY",
+                    type: "lab",
+                    severity: "info",
+                    title: `Lab Orders Dispatched: ${labTests.length} test(s)`,
+                    summary: `Diagnostic pathology tests ordered for ${targetVisit.patient.name} (${targetVisit.patient.patientCode}): ${labTests.map((t: any) => t.name).join(", ")}.`,
+                    actor: {
+                        name: doctorName ? `Dr. ${doctorName}` : "Attending Doctor",
+                        role: "Doctor",
+                        badge: "PATHOLOGY",
+                    },
+                    patientCode: targetVisit.patient.patientCode,
+                    patientName: targetVisit.patient.name,
+                    outcome: "SUCCESS",
+                    details: {
+                        "Diagnostic Tests": labTests.map((t: any) => t.name).join(", "),
+                        "Total Tests Dispatched": labTests.length,
+                        "Diagnostic Status": "PENDING Laboratory Analysis",
+                        "Outcome": "SUCCESS",
                     },
                 });
             }

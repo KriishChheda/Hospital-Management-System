@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSystemAuditTrail } from "@/lib/systemAudit";
+import { requireAuth } from "@/lib/authGuard";
 
 export async function GET(req: Request) {
+    const auth = await requireAuth(req, ["ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const { searchParams } = new URL(req.url);
         const limitParam = searchParams.get("limit");

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { motion, useInView, animate, AnimatePresence } from "framer-motion";
 import { AuditEventDetailModal, FullAuditLogModal } from "@/components/AuditEventModal";
+import BillingBreakdownModal from "@/components/BillingBreakdownModal";
 import type { SystemAuditEvent } from "@/lib/systemAudit";
 
 /* ══════════════════════════════════════════════
@@ -13,6 +14,8 @@ interface StatConfig {
     prefix?: string; suffix?: string;
     color: string; bg: string; border: string; iconPath: string;
     trend: string; trendUp: boolean; sub: string;
+    onClick?: () => void;
+    clickable?: boolean;
 }
 
 interface LoginEntry {
@@ -130,15 +133,25 @@ function StatCard({ stat, index }: { stat: StatConfig; index: number }) {
             initial={{ opacity: 0, y: 28, scale: 0.97 }}
             animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
             transition={{ duration: 0.55, delay: index * 0.055, ease: [0.22, 1, 0.36, 1] }}
-            whileHover={{ y: -3, transition: { duration: 0.2 } }}
-            className={`group relative bg-white rounded-2xl border ${stat.border} p-5 shadow-sm hover:shadow-lg hover:shadow-navy/5 transition-shadow duration-300 overflow-hidden`}
+            whileHover={stat.clickable ? { y: -4, scale: 1.015, transition: { duration: 0.2 } } : { y: -3, transition: { duration: 0.2 } }}
+            onClick={stat.onClick}
+            className={`group relative bg-white rounded-2xl border ${stat.border} p-5 shadow-sm hover:shadow-lg hover:shadow-navy/5 transition-all duration-300 overflow-hidden ${
+                stat.clickable ? "cursor-pointer hover:border-cyan/50 ring-0 hover:ring-2 hover:ring-cyan/20" : ""
+            }`}
         >
             <div className={`absolute -top-8 -right-8 w-28 h-28 ${stat.bg} rounded-full blur-2xl opacity-50 group-hover:opacity-90 transition-opacity duration-500`} />
             <div className="relative z-10">
-                <div className={`w-8 h-8 rounded-xl ${stat.bg} border ${stat.border} flex items-center justify-center mb-4`}>
-                    <svg className={`${stat.color} fill-none stroke-current stroke-[2]`} viewBox="0 0 24 24" style={{ width: 15, height: 15 }} strokeLinecap="round" strokeLinejoin="round">
-                        <path d={stat.iconPath} />
-                    </svg>
+                <div className="flex items-center justify-between mb-4">
+                    <div className={`w-8 h-8 rounded-xl ${stat.bg} border ${stat.border} flex items-center justify-center`}>
+                        <svg className={`${stat.color} fill-none stroke-current stroke-[2]`} viewBox="0 0 24 24" style={{ width: 15, height: 15 }} strokeLinecap="round" strokeLinejoin="round">
+                            <path d={stat.iconPath} />
+                        </svg>
+                    </div>
+                    {stat.clickable && (
+                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-soft-blue text-navy border border-soft-blue group-hover:bg-cyan group-hover:text-white transition-colors">
+                            View Dates &rarr;
+                        </span>
+                    )}
                 </div>
                 <p className="text-[10px] font-bold text-grey uppercase tracking-[0.12em] mb-1 leading-tight">{stat.label}</p>
                 <p className={`text-[28px] font-black tracking-tight leading-none mb-1 ${stat.color}`}>
@@ -456,6 +469,7 @@ export default function ReportsPage() {
     const [lastSync, setLastSync] = useState<string>("");
     const [selectedAuditEvent, setSelectedAuditEvent] = useState<SystemAuditEvent | null>(null);
     const [showFullAuditModal, setShowFullAuditModal] = useState<boolean>(false);
+    const [billingModalType, setBillingModalType] = useState<"pending" | "settled" | null>(null);
 
     // Fetch reports data from real-time database endpoint
     const fetchReports = useCallback(async (isManual = false) => {
@@ -505,7 +519,9 @@ export default function ReportsPage() {
                 iconPath: "M9 8h6m-5 4h4m1 5H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2z",
                 trend: m?.totalBilling.trend ?? "+₹0 today",
                 trendUp: true,
-                sub: `${m?.totalBilling.count ?? 0} settled invoices`,
+                sub: `${m?.totalBilling.count ?? 0} settled invoices · Click for dates`,
+                clickable: true,
+                onClick: () => setBillingModalType("settled"),
             },
             {
                 label: "Active Doctors on Duty",
@@ -524,7 +540,9 @@ export default function ReportsPage() {
                 iconPath: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
                 trend: m?.pendingBills.trend ?? "0 unpaid",
                 trendUp: m?.pendingBills.trendUp ?? true,
-                sub: "Requires reception collection",
+                sub: `${m?.pendingBills.count ?? 0} pending · Click for dates`,
+                clickable: true,
+                onClick: () => setBillingModalType("pending"),
             },
             {
                 label: "Daily Appointments",
@@ -748,6 +766,14 @@ export default function ReportsPage() {
                 events={reportData?.allAuditEvents || (reportData?.activities as unknown as SystemAuditEvent[]) || []}
                 onSelectEvent={(ev) => setSelectedAuditEvent(ev)}
             />
+
+            {/* ── Billing Date Breakdown Modal ── */}
+            {billingModalType && (
+                <BillingBreakdownModal
+                    type={billingModalType}
+                    onClose={() => setBillingModalType(null)}
+                />
+            )}
         </div>
     );
 }

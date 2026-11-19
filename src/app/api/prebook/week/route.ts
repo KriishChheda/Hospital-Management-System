@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 // GET /api/prebook/week?startDate=...&endDate=...
 // Returns all APPROVED / ARRIVED pre-bookings whose approvedSlot falls in the specified range.
 // Defaults to the current week (Monday 00:00:00 to Sunday 23:59:59).
 export async function GET(request: Request) {
+  const auth = await requireAuth(request, ["RECEPTIONIST", "ADMIN"]);
+  if (!auth.success) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const startParam = searchParams.get("startDate");

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { computeQueueScore } from "@/lib/queueScore";
+import { requireAuth } from "@/lib/authGuard";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queue?doctorProfileId=xxx
 // Fetches, rescores, and returns the sorted queue for a doctor.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(request: Request) {
+  const auth = await requireAuth(request, ["DOCTOR", "RECEPTIONIST", "ADMIN", "NURSE"]);
+  if (!auth.success) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const doctorProfileId = searchParams.get("doctorProfileId");
@@ -165,6 +169,9 @@ type QueueAction =
   | "CANCEL";
 
 export async function PATCH(request: Request) {
+  const auth = await requireAuth(request, ["DOCTOR", "RECEPTIONIST", "ADMIN"]);
+  if (!auth.success) return auth.response;
+
   try {
     const body = await request.json();
     const { queueEntryId, action, note } = body as {

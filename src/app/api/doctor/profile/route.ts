@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 // GET: Fetch doctor profile by userId (passed as query param)
 export async function GET(request: Request) {
+    const auth = await requireAuth(request, ["DOCTOR", "ADMIN", "RECEPTIONIST"]);
+    if (!auth.success) return auth.response;
+
     try {
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get("userId");
+        // Default to authenticated user's id if not explicitly specified
+        const userId = searchParams.get("userId") || auth.user.userId;
 
         if (!userId) {
             return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -23,11 +28,17 @@ export async function GET(request: Request) {
 
 // POST: Create or update doctor profile (upsert)
 export async function POST(request: Request) {
+    const auth = await requireAuth(request, ["DOCTOR", "ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const body = await request.json();
         const { userId, fullName, specialization, qualification, experience, phone, consultationFee, availableNow, weeklySlots } = body;
 
-        if (!userId || !fullName || !specialization) {
+        // Prevent IDOR: Doctors can only mutate their own profile
+        const effectiveUserId = auth.user.role === "ADMIN" ? (userId || auth.user.userId) : auth.user.userId;
+
+        if (!effectiveUserId || !fullName || !specialization) {
             return NextResponse.json({ error: "userId, fullName, and specialization are required" }, { status: 400 });
         }
 
@@ -55,9 +66,9 @@ export async function POST(request: Request) {
         };
 
         const profile = await prisma.doctorProfile.upsert({
-            where: { userId },
+            where: { userId: effectiveUserId },
             update: data,
-            create: { userId, ...data },
+            create: { userId: effectiveUserId, ...data },
         });
 
         return NextResponse.json({ profile, message: "Profile saved successfully" }, { status: 200 });
@@ -69,16 +80,16 @@ export async function POST(request: Request) {
 
 // PATCH: Toggle availability only
 export async function PATCH(request: Request) {
+    const auth = await requireAuth(request, ["DOCTOR", "ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const body = await request.json();
         const { userId, availableNow } = body;
-
-        if (!userId) {
-            return NextResponse.json({ error: "userId is required" }, { status: 400 });
-        }
+        const effectiveUserId = auth.user.role === "ADMIN" ? (userId || auth.user.userId) : auth.user.userId;
 
         const profile = await prisma.doctorProfile.update({
-            where: { userId },
+            where: { userId: effectiveUserId },
             data: { availableNow },
         });
 

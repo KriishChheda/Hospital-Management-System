@@ -71,6 +71,27 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden bg-navy">
+      {/* Back to Home Button */}
+      <Link
+        href="/"
+        className="absolute top-6 left-6 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all backdrop-blur-md shadow-sm active:scale-95"
+        title="Return to Home Page"
+      >
+        <svg
+          className="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+        <span>Back to Home</span>
+      </Link>
+
       {/* Animated Background */}
       <div className="absolute inset-0 z-0">
         <ShapeGrid
@@ -148,7 +169,7 @@ export default function LoginPage() {
           </motion.button>
 
           <p className="text-center text-sm text-grey">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-cyan font-bold hover:underline">
               Request Access
             </Link>

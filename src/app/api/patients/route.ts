@@ -1,23 +1,44 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
-// Generate a human-readable patient code: HMS-0001, HMS-0002, etc.
-async function generatePatientCode(): Promise<string> {
-    const lastPatient = await prisma.patient.findFirst({
-        orderBy: { patientCode: "desc" },
+// Robust sequential patient code generator: guarantees no collisions across any existing records
+async function generatePatientCode(tx?: any): Promise<string> {
+    const client = tx || prisma;
+    const allPatients = await client.patient.findMany({
         select: { patientCode: true },
     });
 
-    let nextNum = 1;
-    if (lastPatient?.patientCode) {
-        const match = lastPatient.patientCode.match(/HMS-(\d+)/);
-        if (match) nextNum = parseInt(match[1]) + 1;
+    let maxNum = 0;
+    const takenCodes = new Set<string>();
+
+    for (const p of allPatients) {
+        if (p.patientCode) {
+            takenCodes.add(p.patientCode);
+            const match = p.patientCode.match(/(\d+)/);
+            if (match) {
+                const n = parseInt(match[1], 10);
+                if (!isNaN(n) && n > maxNum) {
+                    maxNum = n;
+                }
+            }
+        }
     }
 
-    return `HMS-${String(nextNum).padStart(4, "0")}`;
+    let nextNum = maxNum + 1;
+    while (true) {
+        const candidate = `HMS-${String(nextNum).padStart(4, "0")}`;
+        if (!takenCodes.has(candidate)) {
+            return candidate;
+        }
+        nextNum++;
+    }
 }
 
 export async function POST(request: Request) {
+    const auth = await requireAuth(request, ["RECEPTIONIST", "ADMIN"]);
+    if (!auth.success) return auth.response;
+
     try {
         const body = await request.json();
 
@@ -141,7 +162,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Phone validation
+        // 2. Phone validation and duplicate pre-check
         const phoneRegex = /^[0-9]{10}$/;
         if (!phoneRegex.test(phone)) {
             return NextResponse.json(
@@ -150,15 +171,44 @@ export async function POST(request: Request) {
             );
         }
 
-        // 3. Aadhaar validation (if provided)
-        if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber)) {
+        const existingPhone = await prisma.patient.findUnique({
+            where: { phone },
+            select: { id: true, name: true, patientCode: true },
+        });
+        if (existingPhone) {
             return NextResponse.json(
-                { error: "Aadhaar number must be exactly 12 digits." },
+                { 
+                    error: `A patient with phone number ${phone} is already registered (${existingPhone.name}, ${existingPhone.patientCode}). If this is a repeat visit, please search them under 'Returning Patient' to register a new visit.` 
+                },
                 { status: 400 }
             );
         }
 
-        // 4. Generate a human-readable patient code
+        // 3. Aadhaar validation and duplicate pre-check (if provided)
+        const cleanAadhaar = aadhaarNumber && String(aadhaarNumber).trim().length > 0 ? String(aadhaarNumber).trim() : null;
+        if (cleanAadhaar) {
+            if (!/^[0-9]{12}$/.test(cleanAadhaar)) {
+                return NextResponse.json(
+                    { error: "Aadhaar number must be exactly 12 digits." },
+                    { status: 400 }
+                );
+            }
+
+            const existingAadhaar = await prisma.patient.findUnique({
+                where: { aadhaarNumber: cleanAadhaar },
+                select: { id: true, name: true, patientCode: true },
+            });
+            if (existingAadhaar) {
+                return NextResponse.json(
+                    { 
+                        error: `A patient with this Aadhaar number is already registered (${existingAadhaar.name}, ${existingAadhaar.patientCode}).` 
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
+        // 4. Generate a sequential, collision-free human-readable patient code
         const patientCode = await generatePatientCode();
 
         // 5. Create the patient + first visit in a transaction
@@ -189,7 +239,7 @@ export async function POST(request: Request) {
                     emergencyContactRelationship: emergencyContactRelationship || null,
                     emergencyContactPhone: emergencyContactPhone || null,
 
-                    aadhaarNumber: aadhaarNumber || null,
+                    aadhaarNumber: cleanAadhaar,
                     aadhaarDocUrl: aadhaarDocUrl || null,
 
                     allergies: allergies || null,
@@ -236,24 +286,34 @@ export async function POST(request: Request) {
         // Handle Unique Constraint Error (P2002 is Prisma's code for unique violation)
         if (error.code === 'P2002') {
             const target = error.meta?.target;
-            if (target?.includes('phone')) {
+            const targetStr = Array.isArray(target)
+                ? target.join(' ').toLowerCase()
+                : String(target || '').toLowerCase();
+
+            if (targetStr.includes('phone')) {
                 return NextResponse.json(
-                    { error: "A patient with this phone number is already registered." },
+                    { error: "A patient with this mobile number is already registered. If they have visited before, please search under Returning Patient." },
                     { status: 400 }
                 );
             }
-            if (target?.includes('aadhaarNumber')) {
+            if (targetStr.includes('aadhaar')) {
                 return NextResponse.json(
-                    { error: "A patient with this Aadhaar number is already registered." },
+                    { error: "A patient with this Aadhaar number is already registered. Please verify the Aadhaar number." },
+                    { status: 400 }
+                );
+            }
+            if (targetStr.includes('patientcode') || targetStr.includes('patient_patientcode_key')) {
+                return NextResponse.json(
+                    { error: "Patient ID collision occurred. Please submit again to generate the next ID." },
                     { status: 400 }
                 );
             }
             return NextResponse.json(
-                { error: "A patient with these details already exists." },
+                { error: `A patient with these details already exists (${targetStr || 'Duplicate unique record'}).` },
                 { status: 400 }
             );
         }
 
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
     }
 }

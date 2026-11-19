@@ -879,6 +879,34 @@ export default function NewPatientPage() {
                   <button
                     type="button"
                     onClick={async () => {
+                      // Audit Log: Record Document Export / Download
+                      fetch("/api/audit/log", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "DOWNLOAD_PATIENT_REGISTRATION_PDF",
+                          category: "RECEPTION",
+                          type: "reg",
+                          severity: "info",
+                          title: `Patient Registration Card Exported: ${(submittedPatient as any).patientCode || submittedPatient.id}`,
+                          summary: `Patient registration slip and barcode card exported to PDF for ${submittedPatient.name} by Reception Desk.`,
+                          actor: {
+                            name: "Reception Desk",
+                            role: "Receptionist",
+                            badge: "RECEPTION",
+                          },
+                          patientCode: (submittedPatient as any).patientCode || submittedPatient.id,
+                          patientName: submittedPatient.name,
+                          outcome: "SUCCESS",
+                          details: {
+                            "Document Type": "Patient Registration Card & Visit Slip (PDF)",
+                            "Patient Identity": `${submittedPatient.name} (${(submittedPatient as any).patientCode || submittedPatient.id})`,
+                            "Export Event": "PDF Card Generated & Downloaded",
+                            "Outcome Status": "SUCCESS",
+                          },
+                        }),
+                      }).catch(() => {});
+
                       const blob = await pdf(<PatientRegistrationPDF patient={submittedPatient} />).toBlob();
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");

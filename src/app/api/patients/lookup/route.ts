@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
 // GET /api/patients/lookup?q=HMS-0001  OR  ?q=9876543210  OR  ?q=123456789012
 // Searches by patientCode, phone, or aadhaarNumber
 export async function GET(request: Request) {
+    const auth = await requireAuth(request, ["RECEPTIONIST", "ADMIN", "DOCTOR", "NURSE"]);
+    if (!auth.success) return auth.response;
+
     try {
         const { searchParams } = new URL(request.url);
         const query = searchParams.get("q")?.trim();

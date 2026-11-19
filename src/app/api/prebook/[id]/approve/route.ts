@@ -1,18 +1,38 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireAuth } from "@/lib/authGuard";
 
-// Helper to generate human-readable patient code
-async function generatePatientCode(): Promise<string> {
-  const lastPatient = await prisma.patient.findFirst({
-    orderBy: { patientCode: "desc" },
+// Robust sequential patient code generator: guarantees no collisions across any existing records
+async function generatePatientCode(tx?: any): Promise<string> {
+  const client = tx || prisma;
+  const allPatients = await client.patient.findMany({
     select: { patientCode: true },
   });
-  let nextNum = 1;
-  if (lastPatient?.patientCode) {
-    const match = lastPatient.patientCode.match(/HMS-(\d+)/);
-    if (match) nextNum = parseInt(match[1]) + 1;
+
+  let maxNum = 0;
+  const takenCodes = new Set<string>();
+
+  for (const p of allPatients) {
+    if (p.patientCode) {
+      takenCodes.add(p.patientCode);
+      const match = p.patientCode.match(/(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (!isNaN(n) && n > maxNum) {
+          maxNum = n;
+        }
+      }
+    }
   }
-  return `HMS-${String(nextNum).padStart(4, "0")}`;
+
+  let nextNum = maxNum + 1;
+  while (true) {
+    const candidate = `HMS-${String(nextNum).padStart(4, "0")}`;
+    if (!takenCodes.has(candidate)) {
+      return candidate;
+    }
+    nextNum++;
+  }
 }
 
 // POST /api/prebook/[id]/approve
@@ -28,6 +48,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["RECEPTIONIST", "ADMIN"]);
+  if (!auth.success) return auth.response;
+
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

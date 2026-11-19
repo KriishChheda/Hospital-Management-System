@@ -42,6 +42,97 @@ export interface SystemAuditReport {
     };
 }
 
+// Global in-memory audit store
+declare global {
+    var __hms_audit_events: SystemAuditEvent[] | undefined;
+}
+
+if (!globalThis.__hms_audit_events) {
+    globalThis.__hms_audit_events = [];
+}
+
+export interface RecordAuditParams {
+    action: string;
+    category: "SYSTEM" | "AUTH" | "RECEPTION" | "CLINICAL" | "NURSE" | "PHARMACY" | "LABORATORY" | "BILLING";
+    type?: "reg" | "bill" | "lab" | "vital" | "pharmacy" | "auth" | "system" | "doctor" | "prebook" | "def";
+    severity?: "info" | "success" | "warning" | "critical";
+    title?: string;
+    summary?: string;
+    actor: {
+        name: string;
+        role: string;
+        id?: string;
+        badge?: string;
+    };
+    patientCode?: string;
+    patientName?: string;
+    outcome?: "SUCCESS" | "FAILURE";
+    details?: Record<string, unknown>;
+}
+
+// Strictly strips passwords, tokens, full clinical narratives, or full medical histories
+const SENSITIVE_KEYS = new Set([
+    "password", "token", "secret", "jwt", "clinicalnotes", "rawmedicalrecord",
+    "allergies", "pastsurgeries", "medicalhistory", "aadhaarnumber", "patientdata",
+]);
+
+function sanitizeDetails(details?: Record<string, unknown>): Record<string, unknown> {
+    if (!details) return {};
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(details)) {
+        if (!SENSITIVE_KEYS.has(key.toLowerCase().replace(/[\s_-]/g, ""))) {
+            sanitized[key] = typeof val === "string" && val.length > 250 ? `${val.slice(0, 247)}...` : val;
+        }
+    }
+    return sanitized;
+}
+
+export function recordAuditLog(params: RecordAuditParams): SystemAuditEvent {
+    const now = new Date();
+    const id = `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const outcomeStr = params.outcome || "SUCCESS";
+
+    const event: SystemAuditEvent = {
+        id,
+        time: "Just now",
+        fullTime: formatFullDateTime(now),
+        timestamp: now.getTime(),
+        text: `${params.title || params.action} (${outcomeStr})`,
+        user: params.actor.name,
+        type: params.type || "doctor",
+        category: params.category,
+        severity: params.severity || (outcomeStr === "SUCCESS" ? "info" : "warning"),
+        title: params.title || params.action,
+        summary: params.summary || `${params.action} performed by ${params.actor.name} (${params.actor.role}). Outcome: ${outcomeStr}.`,
+        actor: params.actor,
+        entity: params.patientCode ? {
+            type: "Patient Record",
+            id: params.patientCode,
+            name: params.patientName || "Patient",
+            code: params.patientCode,
+        } : undefined,
+        details: {
+            "Action Outcome": outcomeStr,
+            "Security Classification": "Audit Log Verified",
+            "Actor Name": params.actor.name,
+            "Actor Role": params.actor.role,
+            ...(params.patientCode ? { "Patient Reference": `${params.patientName || "Patient"} (${params.patientCode})` } : {}),
+            ...sanitizeDetails(params.details),
+            "Log Timestamp": formatFullDateTime(now),
+        },
+    };
+
+    if (!globalThis.__hms_audit_events) {
+        globalThis.__hms_audit_events = [];
+    }
+    globalThis.__hms_audit_events.unshift(event);
+    if (globalThis.__hms_audit_events.length > 250) {
+        globalThis.__hms_audit_events.pop();
+    }
+
+    return event;
+}
+
 function formatTimeAgo(d: Date): string {
     const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
     if (diffSec < 45) return "Just now";
@@ -779,6 +870,11 @@ export async function getSystemAuditTrail(limit = 60): Promise<SystemAuditReport
             },
         });
     });
+
+    // 9. MERGE CUSTOM RUNTIME SECURITY AUDIT LOGS (Record views, exports, prints, edits)
+    if (globalThis.__hms_audit_events && globalThis.__hms_audit_events.length > 0) {
+        allEvents.push(...globalThis.__hms_audit_events);
+    }
 
     // Sort all events by timestamp descending
     allEvents.sort((a, b) => b.timestamp - a.timestamp);

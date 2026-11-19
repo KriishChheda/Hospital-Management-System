@@ -27,6 +27,8 @@ interface PatientData {
     allergies: string | null; existingConditions: string[]; currentMedications: string | null;
     pastSurgeries: string | null; disabilityInfo: string | null;
     maritalStatus: string | null; email: string | null;
+    doctorName?: string | null;
+    doctorSpecialization?: string | null;
     pastVisits: { visitId: string; createdAt: string; critical: string }[];
 }
 
@@ -48,6 +50,34 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                 }
                 const data = await res.json();
                 setPatientData(data);
+
+                // Audit Log: Record View
+                fetch("/api/audit/log", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "VIEW_PATIENT_EMR",
+                        category: "CLINICAL",
+                        type: "doctor",
+                        severity: "info",
+                        title: `Patient EMR Record Viewed: ${data.patientCode}`,
+                        summary: `Dr. ${data.doctorName || "Consulting Doctor"} accessed clinical medical record for ${data.name} (${data.patientCode}).`,
+                        actor: {
+                            name: data.doctorName ? `Dr. ${data.doctorName}` : "Attending Doctor",
+                            role: data.doctorSpecialization || "Doctor",
+                            badge: "CLINICAL",
+                        },
+                        patientCode: data.patientCode,
+                        patientName: data.name,
+                        outcome: "SUCCESS",
+                        details: {
+                            "Access Context": "EMR Workstation Active View",
+                            "Patient Reference": `${data.name} (${data.patientCode})`,
+                            "Consultation ID": visitId,
+                            "Outcome": "Authorized Read Access Granted",
+                        },
+                    }),
+                }).catch(() => {});
             } catch {
                 setFetchError("Could not connect to server");
             } finally {
@@ -56,6 +86,41 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
         }
         loadPatient();
     }, [visitId]);
+
+    const handlePrintPrescription = () => {
+        if (patientData) {
+            fetch("/api/audit/log", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "PRINT_PRESCRIPTION",
+                    category: "CLINICAL",
+                    type: "doctor",
+                    severity: "info",
+                    title: `Doctor Prescription Printed: ${patientData.patientCode}`,
+                    summary: `Doctor prescription summary printed and exported for ${patientData.name} (${patientData.patientCode}) by Dr. ${patientData.doctorName || "Attending Doctor"}.`,
+                    actor: {
+                        name: patientData.doctorName ? `Dr. ${patientData.doctorName}` : "Consulting Physician",
+                        role: patientData.doctorSpecialization || "Doctor",
+                        badge: "PRESCRIPTION",
+                    },
+                    patientCode: patientData.patientCode,
+                    patientName: patientData.name,
+                    outcome: "SUCCESS",
+                    details: {
+                        "Document Type": "Printed Prescription & Consultation Slip",
+                        "Patient Identity": `${patientData.name} (${patientData.patientCode})`,
+                        "Attending Physician": patientData.doctorName ? `Dr. ${patientData.doctorName}` : "Doctor",
+                        "Export Channel": "Browser Print / Digital PDF",
+                        "Items Prescribed Count": `${medicines.length} medicine(s)`,
+                        "Diagnostics Ordered Count": `${labs.length} test(s)`,
+                        "Outcome Status": "SUCCESS",
+                    },
+                }),
+            }).catch(() => {});
+        }
+        window.print();
+    };
 
     const [chiefComplaint, setChiefComplaint] = useState("");
     const [clinicalNotes, setClinicalNotes] = useState("");
@@ -207,7 +272,7 @@ export default function PatientEMRPage({ params }: { params: Promise<RouteParams
                     <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg ${criticalBadge}`}>
                         {patientData.critical} priority
                     </span>
-                    <button onClick={() => window.print()} className="bg-navy hover:bg-navy/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center">
+                    <button onClick={handlePrintPrescription} className="bg-navy hover:bg-navy/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center">
                         <PrinterIcon /> Print Prescription Summary
                     </button>
                 </div>
