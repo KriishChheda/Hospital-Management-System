@@ -5,6 +5,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ResizableSidebar from "@/components/ResizableSidebar";
+import BizlumeLogo from "@/components/BizlumeLogo";
 
 // ── Clean SVG Icons ──────────────────────────────────────────────────────────
 const IntakeIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
@@ -61,9 +62,7 @@ export default function ReceptionistLayout({ children }: { children: React.React
         className="bg-navy text-white p-6"
       >
         <div className="space-y-8">
-          <div className="text-xl font-black tracking-tighter truncate">
-            BIZLUME <span className="text-cyan text-[10px] tracking-widest">STAFF</span>
-          </div>
+          <BizlumeLogo subtitle="RECEPTION DESK" />
 
           <nav className="flex flex-col gap-2">
             <NavLink href="/registeration" label="Patient Intake" icon={<IntakeIcon />} active={pathname === "/registeration"} />

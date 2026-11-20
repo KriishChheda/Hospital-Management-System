@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ResizableSidebar from "@/components/ResizableSidebar";
+import BizlumeLogo from "@/components/BizlumeLogo";
 
 const StaffIcon = () => (
     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -48,12 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className="bg-navy text-white p-6 shadow-xl"
             >
                 <div className="space-y-8">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-cyan rounded-lg flex items-center justify-center text-navy font-black shrink-0">A</div>
-                        <div className="text-xl font-black tracking-tighter truncate">
-                            BIZLUME <span className="text-cyan text-[10px] tracking-widest block">ADMIN PANEL</span>
-                        </div>
-                    </div>
+                    <BizlumeLogo subtitle="ADMIN PANEL" />
 
                     <nav className="flex flex-col gap-2">
                         <AdminNavLink

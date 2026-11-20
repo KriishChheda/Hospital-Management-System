@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ResizableSidebar from "@/components/ResizableSidebar";
+import BizlumeLogo from "@/components/BizlumeLogo";
 
 const DashboardIcon = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -54,9 +55,7 @@ export default function PharmacyLayout({ children }: { children: React.ReactNode
         className="bg-navy text-white p-6 shadow-xl"
       >
         <div className="space-y-8">
-          <div className="text-xl font-black tracking-tighter truncate">
-            BIZLUME <span className="text-cyan text-[10px] tracking-widest">PHARMACY</span>
-          </div>
+          <BizlumeLogo subtitle="PHARMACY HUB" />
 
           <nav className="flex flex-col gap-2">
             <NavLink href="/pharmacy-dashboard" label="Dashboard" icon={<DashboardIcon />} active={pathname === "/pharmacy-dashboard"} />

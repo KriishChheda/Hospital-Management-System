@@ -4,6 +4,7 @@ import React, { useRef } from "react";
 import { motion, useScroll, useTransform, useInView } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
+import logoHeaderDark from "@/assets/logo-header-dark.png";
 
 /* ─── FADE UP WRAPPER ─── */
 function FadeUp({
@@ -132,15 +133,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="text-[13px] font-semibold text-grey hover:text-navy transition-colors hidden sm:block no-underline"
+              className="bg-navy text-white px-6 py-2.5 rounded-xl text-[13px] font-bold hover:bg-cyan hover:text-navy transition-all duration-200 no-underline shadow-sm"
             >
               Sign in
-            </Link>
-            <Link
-              href="/login"
-              className="bg-navy text-white px-5 py-2.5 rounded-xl text-[13px] font-bold hover:bg-cyan hover:text-navy transition-all duration-200 no-underline shadow-sm"
-            >
-              Staff Portal →
             </Link>
           </div>
         </div>
@@ -149,6 +144,7 @@ export default function LandingPage() {
       {/* ── HERO ── */}
       <section
         ref={heroRef}
+        id="about"
         className="relative pt-40 pb-28 px-6 overflow-hidden min-h-screen flex items-center"
       >
         {/* BG blobs */}
@@ -667,35 +663,32 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer className="bg-navy text-white pt-16 pb-10 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 pb-12 border-b border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 pb-12 border-b border-white/10 items-start">
             <div className="md:col-span-2">
               <div className="mb-5">
                 <Image
-                  src="/logo-header.png"
+                  src={logoHeaderDark}
                   alt="Bizlume Technology & Solutions"
-                  width={650}
-                  height={200}
-                  className="h-16 w-auto object-contain brightness-0 invert"
+                  className="h-14 w-auto object-contain"
                 />
               </div>
-              <p className="text-white/40 text-[13px] font-light leading-relaxed max-w-xs">
+              <p className="text-white/40 text-[13px] font-light leading-relaxed max-w-sm">
                 Modernizing healthcare through intelligent, stable, clinician-first software.
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan mb-5">Platform</p>
-              <ul className="space-y-3 text-[13px] text-white/50">
-                {["EMR Hub", "Smart Triage", "Pharmacy Sync", "Lab Module", "Billing Engine"].map((i) => (
-                  <li key={i} className="hover:text-white cursor-pointer transition-colors">{i}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan mb-5">Support</p>
-              <ul className="space-y-3 text-[13px] text-white/50">
-                {["Documentation", "API Reference", "Contact Support", "System Status"].map((i) => (
-                  <li key={i} className="hover:text-white cursor-pointer transition-colors">{i}</li>
-                ))}
+              <ul className="space-y-3 text-[13px] text-white/60">
+                <li>
+                  <a href="#features" className="hover:text-white transition-colors no-underline">
+                    Documentation
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:support@bizlume.com" className="hover:text-white transition-colors no-underline">
+                    Contact Support
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
