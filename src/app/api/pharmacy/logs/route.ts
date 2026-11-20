@@ -6,7 +6,23 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const pharmacistId = searchParams.get("pharmacistId");
         const action = searchParams.get("action");
-        const limit = parseInt(searchParams.get("limit") || "50");
+        const limitParam = searchParams.get("limit");
+
+        if (pharmacistId && pharmacistId.length > 50) {
+            return NextResponse.json(
+                { error: "pharmacistId must not exceed 50 characters." },
+                { status: 400 }
+            );
+        }
+
+        if (action && action.length > 50) {
+            return NextResponse.json(
+                { error: "action must not exceed 50 characters." },
+                { status: 400 }
+            );
+        }
+
+        const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 200) : 50;
 
         const logs = await prisma.pharmacistLog.findMany({
             where: {

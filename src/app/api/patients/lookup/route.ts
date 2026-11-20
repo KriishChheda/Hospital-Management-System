@@ -19,6 +19,13 @@ export async function GET(request: Request) {
             );
         }
 
+        if (query.length > 50) {
+            return NextResponse.json(
+                { error: "Search query must not exceed 50 characters." },
+                { status: 400 }
+            );
+        }
+
         // Search across patientCode, phone, and aadhaarNumber
         const patients = await prisma.patient.findMany({
             where: {

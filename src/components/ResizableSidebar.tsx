@@ -19,24 +19,26 @@ export default function ResizableSidebar({
   storageKey = "bizlume_sidebar_width",
   className = "",
 }: ResizableSidebarProps) {
-  const [width, setWidth] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          const parsed = parseInt(saved, 10);
-          if (!isNaN(parsed) && parsed >= minWidth && parsed <= maxWidth) {
-            return parsed;
-          }
-        }
-      } catch {
-        // Ignore localStorage access issues
-      }
-    }
-    return defaultWidth;
-  });
+  const [width, setWidth] = useState<number>(defaultWidth);
+  const [isMounted, setIsMounted] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
+
+  // Restore persisted width after initial client mount to guarantee SSR matches initial client render
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= minWidth && parsed <= maxWidth) {
+          setWidth(parsed);
+        }
+      }
+    } catch {
+      // Ignore localStorage access issues
+    }
+  }, [storageKey, minWidth, maxWidth]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -79,18 +81,19 @@ export default function ResizableSidebar({
 
   // Persist width when dragging completes
   useEffect(() => {
-    if (!isResizing) {
+    if (isMounted && !isResizing) {
       try {
         localStorage.setItem(storageKey, width.toString());
       } catch {
         // Ignore
       }
     }
-  }, [isResizing, width, storageKey]);
+  }, [isMounted, isResizing, width, storageKey]);
 
   return (
     <aside
       ref={sidebarRef}
+      suppressHydrationWarning
       style={{ width: `${width}px` }}
       className={`relative select-none flex flex-col justify-between shrink-0 ${
         isResizing ? "transition-none" : "transition-[width] duration-75"

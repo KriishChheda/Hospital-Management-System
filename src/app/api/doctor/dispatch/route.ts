@@ -23,8 +23,33 @@ export async function POST(request: Request) {
 
         const targetVisit = await prisma.visit.findUnique({
             where: { id: targetVisitId },
-            select: { patient: { select: { patientCode: true, name: true } } },
+            select: {
+                doctorProfileId: true,
+                patient: { select: { patientCode: true, name: true } },
+            },
         });
+
+        if (!targetVisit) {
+            return NextResponse.json(
+                { success: false, error: "Visit not found." },
+                { status: 404 }
+            );
+        }
+
+        // Strict Doctor Assignment Check (Option A - IDOR protection)
+        if (auth.user.role === "DOCTOR") {
+            const doctorProfile = await prisma.doctorProfile.findUnique({
+                where: { userId: auth.user.userId },
+                select: { id: true },
+            });
+
+            if (!doctorProfile || (targetVisit.doctorProfileId && targetVisit.doctorProfileId !== doctorProfile.id)) {
+                return NextResponse.json(
+                    { success: false, error: "Access denied. You cannot dispatch orders for a consultation assigned to another doctor." },
+                    { status: 403 }
+                );
+            }
+        }
 
         // 1. Update the consultation fee (if provided)
         if (consultationFee !== undefined && consultationFee !== null) {

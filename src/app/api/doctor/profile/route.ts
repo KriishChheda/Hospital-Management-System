@@ -16,6 +16,10 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "userId is required" }, { status: 400 });
         }
 
+        if (userId.length > 50) {
+            return NextResponse.json({ error: "userId must not exceed 50 characters." }, { status: 400 });
+        }
+
         const profile = await prisma.doctorProfile.findUnique({
             where: { userId },
         });

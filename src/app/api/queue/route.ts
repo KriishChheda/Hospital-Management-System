@@ -22,6 +22,13 @@ export async function GET(request: Request) {
       );
     }
 
+    if (doctorProfileId.length > 50) {
+      return NextResponse.json(
+        { error: "doctorProfileId must not exceed 50 characters." },
+        { status: 400 }
+      );
+    }
+
     const now = new Date();
 
     // Fetch all active entries for this doctor
@@ -194,6 +201,20 @@ export async function PATCH(request: Request) {
 
     if (!existing) {
       return NextResponse.json({ error: "Queue entry not found" }, { status: 404 });
+    }
+
+    // Strict Doctor Assignment Check (Option A - IDOR protection)
+    if (auth.user.role === "DOCTOR") {
+      const doctorProfile = await prisma.doctorProfile.findUnique({
+        where: { userId: auth.user.userId },
+        select: { id: true },
+      });
+      if (!doctorProfile || (existing.doctorProfileId && existing.doctorProfileId !== doctorProfile.id)) {
+        return NextResponse.json(
+          { error: "Access denied. You cannot modify queue entries assigned to another doctor." },
+          { status: 403 }
+        );
+      }
     }
 
     // Special deterministic swap handling for BUMP_UP and BUMP_DOWN

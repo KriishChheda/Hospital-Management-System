@@ -14,6 +14,13 @@ export async function GET(request: Request) {
     const startParam = searchParams.get("startDate");
     const endParam = searchParams.get("endDate");
 
+    if (startParam && startParam.length > 35) {
+      return NextResponse.json({ error: "startDate parameter must not exceed 35 characters." }, { status: 400 });
+    }
+    if (endParam && endParam.length > 35) {
+      return NextResponse.json({ error: "endDate parameter must not exceed 35 characters." }, { status: 400 });
+    }
+
     let start: Date;
     let end: Date;
 

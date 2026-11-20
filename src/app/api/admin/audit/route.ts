@@ -12,6 +12,20 @@ export async function GET(req: Request) {
         const categoryParam = searchParams.get("category");
         const searchParam = searchParams.get("search")?.toLowerCase().trim();
 
+        if (searchParam && searchParam.length > 100) {
+            return NextResponse.json(
+                { error: "Search query must not exceed 100 characters." },
+                { status: 400 }
+            );
+        }
+
+        if (categoryParam && categoryParam.length > 40) {
+            return NextResponse.json(
+                { error: "Category parameter must not exceed 40 characters." },
+                { status: 400 }
+            );
+        }
+
         const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10), 10), 200) : 100;
         const report = await getSystemAuditTrail(limit);
 

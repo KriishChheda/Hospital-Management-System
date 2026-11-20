@@ -12,6 +12,20 @@ export async function GET(request: Request) {
         const lowStock = searchParams.get("lowStock") === "true";
         const search = searchParams.get("search");
 
+        if (search && search.length > 80) {
+            return NextResponse.json(
+                { error: "Search term must not exceed 80 characters." },
+                { status: 400 }
+            );
+        }
+
+        if (category && category.length > 40) {
+            return NextResponse.json(
+                { error: "Category filter must not exceed 40 characters." },
+                { status: 400 }
+            );
+        }
+
         const medicines = await prisma.medicine.findMany({
             where: {
                 ...(category ? { category } : {}),

@@ -10,6 +10,13 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get("status");
 
+        if (status && status.length > 20) {
+            return NextResponse.json(
+                { error: "Status parameter must not exceed 20 characters." },
+                { status: 400 }
+            );
+        }
+
         const prescriptions = await prisma.prescription.findMany({
             where: status ? { status: status as any } : undefined,
             orderBy: { createdAt: "desc" },

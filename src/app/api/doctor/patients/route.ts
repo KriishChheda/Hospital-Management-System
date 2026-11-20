@@ -10,9 +10,27 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const doctorProfileId = searchParams.get("doctorProfileId");
 
+        if (doctorProfileId && doctorProfileId.length > 50) {
+            return NextResponse.json(
+                { error: "doctorProfileId must not exceed 50 characters." },
+                { status: 400 }
+            );
+        }
+
+        let effectiveDoctorId = doctorProfileId;
+        if (auth.user.role === "DOCTOR") {
+            const doctorProfile = await prisma.doctorProfile.findUnique({
+                where: { userId: auth.user.userId },
+                select: { id: true },
+            });
+            if (doctorProfile) {
+                effectiveDoctorId = doctorProfile.id;
+            }
+        }
+
         // Fetch visits — scoped to doctor if provided, otherwise all
         const visits = await prisma.visit.findMany({
-            where: doctorProfileId ? { doctorProfileId } : {},
+            where: effectiveDoctorId ? { doctorProfileId: effectiveDoctorId } : {},
             orderBy: { createdAt: "desc" },
             include: {
                 patient: {

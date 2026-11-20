@@ -61,6 +61,21 @@ export async function GET(
             );
         }
 
+        // Strict Doctor Assignment Check (Option A - IDOR protection)
+        if (auth.user.role === "DOCTOR") {
+            const doctorProfile = await prisma.doctorProfile.findUnique({
+                where: { userId: auth.user.userId },
+                select: { id: true },
+            });
+
+            if (!doctorProfile || (visit.doctorProfileId && visit.doctorProfileId !== doctorProfile.id)) {
+                return NextResponse.json(
+                    { error: "Access denied. You are not assigned to this patient consultation." },
+                    { status: 403 }
+                );
+            }
+        }
+
         // Flatten patient data for the EMR workstation while preserving visit context
         const patient = visit.patient;
         const response = {
